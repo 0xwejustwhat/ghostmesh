@@ -1,0 +1,39 @@
+[tool.poetry]
+name = "ghostmesh"
+version = "0.1.0"
+description = "Graph-native accountability runtime for human and AI work."
+authors = ["Ghost Mesh Contributors"]
+readme = "README.md"
+packages = [{ include = "ghostmesh", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+alembic = "^1.14.1"
+fastapi = "^0.115.8"
+networkx = "^3.4.2"
+pydantic = "^2.10.6"
+psycopg = { version = "^3.2.4", extras = ["binary"] }
+pyyaml = "^6.0.2"
+sqlalchemy = "^2.0.38"
+structlog = "^25.1.0"
+uvicorn = { version = "^0.34.0", extras = ["standard"] }
+
+[tool.poetry.group.dev.dependencies]
+httpx = "^0.28.1"
+pytest = "^8.3.4"
+ruff = "^0.9.6"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

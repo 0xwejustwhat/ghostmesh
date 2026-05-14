@@ -1,0 +1,85 @@
+id: cyclic_review
+version: "1.0.0"
+description: Draft, review, rewrite loop with explicit accepted and rejected routes.
+
+buckets:
+  - id: draft_queue
+  - id: review_queue
+  - id: publish_queue
+
+acceptance_contracts:
+  - id: publishability
+    description: Reviewer decides whether the draft is publishable.
+    rules:
+      - type: human_review
+      - type: score_threshold
+        minimum: 8
+
+nodes:
+  - id: topic_source
+    type: source
+    output_pipes:
+      - topic_output
+  - id: draft_worker
+    type: worker
+    input_pipes:
+      - draft_input
+    output_pipes:
+      - draft_output
+  - id: review_validator
+    type: validator
+    input_pipes:
+      - review_input
+    output_pipes:
+      - review_accept
+      - review_reject
+    acceptance_contract: publishability
+  - id: publish_sink
+    type: sink
+    input_pipes:
+      - publish_input
+
+pipe_bindings:
+  topic_output:
+    node: topic_source
+    direction: output
+    bucket: draft_queue
+  draft_input:
+    node: draft_worker
+    direction: input
+    bucket: draft_queue
+  draft_output:
+    node: draft_worker
+    direction: output
+    bucket: review_queue
+  review_input:
+    node: review_validator
+    direction: input
+    bucket: review_queue
+  review_accept:
+    node: review_validator
+    direction: output
+    bucket: publish_queue
+  review_reject:
+    node: review_validator
+    direction: output
+    bucket: draft_queue
+  publish_input:
+    node: publish_sink
+    direction: input
+    bucket: publish_queue
+
+edges:
+  - from: topic_source
+    to: draft_worker
+    on: card_created
+  - from: draft_worker
+    to: review_validator
+    on: artifact_submitted
+  - from: review_validator
+    to: publish_sink
+    on: accepted
+  - from: review_validator
+    to: draft_worker
+    on: rejected
+

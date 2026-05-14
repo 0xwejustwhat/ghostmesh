@@ -1,0 +1,81 @@
+id: hello_world
+version: "1.0.0"
+description: Minimal Source to Worker to Validator to Sink workflow.
+
+buckets:
+  - id: intake
+    description: Cards created by the source.
+  - id: worker_inbox
+    description: Cards waiting for worker transformation.
+  - id: validation_inbox
+    description: Artifacts waiting for validator review.
+    acceptance_contract: basic_review
+  - id: done
+    description: Accepted Cards ready for sink egress.
+
+acceptance_contracts:
+  - id: basic_review
+    description: Human validator confirms that the artifact is acceptable.
+    rules:
+      - type: human_review
+
+nodes:
+  - id: intake_source
+    type: source
+    output_pipes:
+      - intake_output
+  - id: example_worker
+    type: worker
+    input_pipes:
+      - worker_input
+    output_pipes:
+      - worker_output
+  - id: human_validator
+    type: validator
+    input_pipes:
+      - validator_input
+    output_pipes:
+      - validator_accept
+    acceptance_contract: basic_review
+  - id: archive_sink
+    type: sink
+    input_pipes:
+      - sink_input
+
+pipe_bindings:
+  intake_output:
+    node: intake_source
+    direction: output
+    bucket: intake
+  worker_input:
+    node: example_worker
+    direction: input
+    bucket: worker_inbox
+  worker_output:
+    node: example_worker
+    direction: output
+    bucket: validation_inbox
+  validator_input:
+    node: human_validator
+    direction: input
+    bucket: validation_inbox
+  validator_accept:
+    node: human_validator
+    direction: output
+    bucket: done
+  sink_input:
+    node: archive_sink
+    direction: input
+    bucket: done
+
+edges:
+  - from: intake_source
+    to: example_worker
+    on: card_created
+  - from: example_worker
+    to: human_validator
+    on: artifact_submitted
+  - from: human_validator
+    to: archive_sink
+    on: accepted
+
