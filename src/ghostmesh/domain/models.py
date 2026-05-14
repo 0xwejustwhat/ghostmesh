@@ -18,6 +18,14 @@ class NodeType(StrEnum):
     SUBWORKFLOW = "subworkflow"
 
 
+class MutationStatus(StrEnum):
+    PROPOSED = "proposed"
+    SHADOWING = "shadowing"
+    VALIDATED = "validated"
+    REJECTED = "rejected"
+    PROMOTED = "promoted"
+
+
 class AcceptanceContract(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -145,6 +153,31 @@ class ValidationResult(BaseModel):
     reason: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ShadowCardLink(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID = Field(default_factory=uuid4)
+    production_card_id: UUID
+    shadow_card_id: UUID
+    candidate_id: str
+    status: str = Field(default="active", pattern="^(active|completed|cancelled)$")
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ProposedMutation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID = Field(default_factory=uuid4)
+    mutation_type: str
+    proposed_by: str
+    payload: dict[str, Any]
+    status: MutationStatus = MutationStatus.PROPOSED
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    validated_at: datetime | None = None
+    promoted_at: datetime | None = None
 
 
 class PatchPanel(BaseModel):

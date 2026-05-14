@@ -10,8 +10,12 @@ buckets:
   - id: validation_inbox
     description: Artifacts waiting for validator review.
     acceptance_contract: basic_review
+  - id: junction_inbox
+    description: Validated cards waiting for deterministic routing.
   - id: done
     description: Accepted Cards ready for sink egress.
+  - id: rejected
+    description: Rejected Cards ready for follow-up.
 
 acceptance_contracts:
   - id: basic_review
@@ -35,12 +39,29 @@ nodes:
     input_pipes:
       - validator_input
     output_pipes:
-      - validator_accept
+      - validator_reviewed
     acceptance_contract: basic_review
+  - id: routing_junction
+    type: junction
+    input_pipes:
+      - junction_input
+    output_pipes:
+      - junction_accept
+      - junction_reject
+    config:
+      routes:
+        accepted: junction_accept
+        rejected: junction_reject
   - id: archive_sink
     type: sink
     input_pipes:
       - sink_input
+    config:
+      egress_contract:
+        type: archive
+        external_reference_required: false
+      egress_idempotency:
+        key: card_id + sink_id
 
 pipe_bindings:
   intake_output:
@@ -59,10 +80,22 @@ pipe_bindings:
     node: human_validator
     direction: input
     bucket: validation_inbox
-  validator_accept:
+  validator_reviewed:
     node: human_validator
     direction: output
+    bucket: junction_inbox
+  junction_input:
+    node: routing_junction
+    direction: input
+    bucket: junction_inbox
+  junction_accept:
+    node: routing_junction
+    direction: output
     bucket: done
+  junction_reject:
+    node: routing_junction
+    direction: output
+    bucket: rejected
   sink_input:
     node: archive_sink
     direction: input
@@ -76,5 +109,8 @@ edges:
     to: human_validator
     on: artifact_submitted
   - from: human_validator
+    to: routing_junction
+    on: validated
+  - from: routing_junction
     to: archive_sink
     on: accepted

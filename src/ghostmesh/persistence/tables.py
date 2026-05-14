@@ -111,3 +111,28 @@ idempotency_records = Table(
     Column("response_ref", Text, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
+
+shadow_card_links = Table(
+    "shadow_card_links",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column("production_card_id", Uuid(as_uuid=True), ForeignKey("cards.id"), nullable=False),
+    Column("shadow_card_id", Uuid(as_uuid=True), ForeignKey("cards.id"), nullable=False),
+    Column("candidate_id", String, nullable=False),
+    Column("status", String, nullable=False),
+    Column("metrics", JSON, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
+proposed_mutations = Table(
+    "proposed_mutations",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column("mutation_type", String, nullable=False),
+    Column("proposed_by", String, nullable=False),
+    Column("payload", JSON, nullable=False),
+    Column("status", String, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("validated_at", DateTime(timezone=True), nullable=True),
+    Column("promoted_at", DateTime(timezone=True), nullable=True),
+)

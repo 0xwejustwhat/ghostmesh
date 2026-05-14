@@ -71,6 +71,12 @@ class InMemoryCardRuntime:
     def list_cards(self) -> list[Card]:
         return list(self._cards.values())
 
+    def get_card(self, card_id: UUID) -> Card:
+        return self._get_card(card_id)
+
+    def get_lease(self, lease_id: UUID) -> Lease:
+        return self._get_lease(lease_id)
+
     def claim_card(
         self,
         *,
@@ -306,6 +312,29 @@ class InMemoryCardRuntime:
     def card_history(self, card_id: UUID) -> list[CardEvent]:
         self._get_card(card_id)
         return list(self._events.get(card_id, []))
+
+    def record_event(
+        self,
+        *,
+        card_id: UUID,
+        event_type: str,
+        actor_id: str | None = None,
+        payload: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> CardEvent:
+        if cached := self._get_idempotent(idempotency_key):
+            return _typed(cached, CardEvent)
+
+        self._get_card(card_id)
+        event = CardEvent(
+            card_id=card_id,
+            event_type=event_type,
+            actor_id=actor_id,
+            payload=payload or {},
+        )
+        self._record_event(event)
+        self._store_idempotent(idempotency_key, event)
+        return event
 
     def _record_event(self, event: CardEvent) -> None:
         self._events.setdefault(event.card_id, []).append(event)

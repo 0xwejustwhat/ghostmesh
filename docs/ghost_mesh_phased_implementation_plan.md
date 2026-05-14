@@ -10,13 +10,16 @@ This document preserves the existing implementation blueprint as source material
 
 Last updated: 2026-05-14
 
-- Phase 0, Phase 1, Phase 2, and Phase 3 are implemented.
+- Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, and Phase 6 are implemented.
 - The repository now includes a Poetry-managed Python package, FastAPI app, Docker Compose configuration, Alembic scaffolding, structured logging setup, Ruff linting, Makefile commands, and baseline GitHub Actions CI.
 - Implemented Phase 1 scope includes Pydantic domain models, YAML/JSON Patch Panel loading, NetworkX-backed graph validation, example Patch Panels, and Pytest coverage.
 - Phase 2 scope includes durable workflow versions, buckets, cards, card locations, artifacts, card events, validation results, leases, and idempotency records; a Postgres-backed card runtime; append-only evidence replay; source-node card creation; REST access to cards and history; a minimal pipe-aware `WorkerClient`; and a shadow card harness.
 - Phase 3 scope includes pipe-aware claim and submit flow, Postgres row-lock claim selection, lease renewal, lease release, lease expiry recovery, idempotent claim/submit/renew/release/validate/move operations, and REST endpoints for lease lifecycle actions.
-- Verification commands: `poetry run ruff check .`, `poetry run pytest`, `poetry run alembic upgrade head`, `docker compose config`, `docker compose up --build -d`, `curl http://localhost:8000/health`, and `docker compose exec -T postgres pg_isready -U ghostmesh -d ghostmesh`.
-- Latest verification result: Ruff passed, 19 tests passed, Alembic reports `20260514_0002 (head)`, Docker Compose config validated, API and Postgres containers started, `/health` returned `{"status":"ok"}`, `/cards` returned from the database-backed API, and Postgres accepted connections.
+- Phase 4 scope includes an MVP `NodeExecutor`, executable Source/Worker/Human Validator/Junction/Sink behavior, deterministic junction routing, sink egress evidence, node execution REST endpoints, and a canonical Source to Worker to Human Validator to Junction to Sink workflow.
+- Phase 5 scope includes worker lease context inspection, SDK auth/idempotency headers, SDK claim/submit/renew/release/context helpers, human validator review queues, card/evidence inspection, and accept/reject decision endpoints.
+- Phase 6 scope includes shadow card links, sampling and max-parallel controls, production sink isolation for shadow cards, proposed mutation records, mutation validation gates, promotion gates, shadow comparison metrics, and REST endpoints for shadow and mutation flows.
+- Verification commands: `poetry run ruff check .`, `poetry run pytest`, `poetry run alembic upgrade head`, `poetry run alembic current`, `docker compose config`, `docker compose up --build -d`, `curl http://localhost:8000/health`, `curl http://localhost:8000/cards`, and `docker compose exec -T postgres pg_isready -U ghostmesh -d ghostmesh`.
+- Latest verification result: Ruff passed, 28 tests passed, Alembic reports `20260514_0003 (head)`, Docker Compose config validated, API and Postgres containers started, `/health` returned `{"status":"ok"}`, `/cards` returned from the database-backed API, and Postgres accepted connections.
 
 ## Source Materials
 
@@ -170,6 +173,8 @@ Implement deterministic card movement with leases, idempotency, and zero-loss be
 
 ## Phase 4: Node Execution MVP
 
+Implementation status: complete.
+
 ### Goal
 
 Execute the minimum useful Ghost Mesh workflow with Source, Worker, Validator, Junction, and Sink nodes.
@@ -194,6 +199,8 @@ Execute the minimum useful Ghost Mesh workflow with Source, Worker, Validator, J
 
 ## Phase 5: Worker SDK and Human Validation Surface
 
+Implementation status: complete.
+
 ### Goal
 
 Make workers and human validators easy to integrate without exposing graph internals.
@@ -215,6 +222,8 @@ Make workers and human validators easy to integrate without exposing graph inter
 - All human and worker actions append evidence events.
 
 ## Phase 6: Shadow Lanes and Mutation Safety
+
+Implementation status: complete.
 
 ### Goal
 

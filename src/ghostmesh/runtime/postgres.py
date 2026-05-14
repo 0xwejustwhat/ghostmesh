@@ -151,6 +151,14 @@ class PostgresCardRuntime:
             rows = session.execute(select(cards)).all()
         return [_card_from_row(row._mapping) for row in rows]
 
+    def get_card(self, card_id: UUID) -> Card:
+        with Session(self.engine) as session:
+            return self._get_card(session, card_id)
+
+    def get_lease(self, lease_id: UUID) -> Lease:
+        with Session(self.engine) as session:
+            return self._get_lease(session, lease_id)
+
     def claim_card(
         self,
         *,
@@ -477,6 +485,31 @@ class PostgresCardRuntime:
                 .order_by(card_events.c.occurred_at, card_events.c.id)
             ).all()
         return [_event_from_row(row._mapping) for row in rows]
+
+    def record_event(
+        self,
+        *,
+        card_id: UUID,
+        event_type: str,
+        actor_id: str | None = None,
+        payload: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> CardEvent:
+        with Session(self.engine) as session, session.begin():
+            cached = self._get_idempotency(session, idempotency_key)
+            if cached:
+                return self._get_event(session, UUID(cached.removeprefix("event:")))
+
+            self._get_card(session, card_id)
+            event = CardEvent(
+                card_id=card_id,
+                event_type=event_type,
+                actor_id=actor_id,
+                payload=payload or {},
+            )
+            self._insert_event(session, event)
+            self._store_idempotency(session, idempotency_key, "event.record", f"event:{event.id}")
+            return event
 
     def _move_card_row(
         self,

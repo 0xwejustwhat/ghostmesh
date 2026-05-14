@@ -44,6 +44,36 @@ Phase 3 card movement:
 - REST endpoints for lease lifecycle actions
 - Tests covering expired lease recovery, idempotent submit, and lease API behavior
 
+Phase 4 node execution:
+
+- MVP `NodeExecutor` for Source, Worker, Human Validator, Junction, and Sink nodes
+- Deterministic junction routing from validator evidence
+- Sink execution evidence with optional external references
+- Canonical Source to Worker to Human Validator to Junction to Sink workflow
+- REST endpoints under `/nodes/.../execute`
+- Tests covering accepted and rejected junction routes plus API node execution
+
+Phase 5 worker and validator surfaces:
+
+- Worker SDK helpers for claim, submit, renew, release, and assigned-card context
+- SDK idempotency and optional bearer auth headers
+- Worker context endpoint at `/workers/leases/{lease_id}/context`
+- Human validator review queues at `/validators/{validator_id}/cards`
+- Human validator card inspection at `/validators/cards/{card_id}`
+- Human validator decision submission at `/validators/{validator_id}/cards/{card_id}/decision`
+- Tests covering worker context, validator review/decision flow, and SDK headers
+
+Phase 6 shadow and mutation safety:
+
+- Shadow card links with production/shadow card references
+- Sampling and maximum parallel shadow controls
+- Shadow comparison metrics
+- Production sink protection for shadow cards
+- Proposed mutation records and mutation validation gates
+- Promotion gate that only promotes validated mutations
+- REST endpoints for `/shadows` and `/mutations`
+- Tests proving shadow isolation, sampling/parallel limits, and mutation validation before promotion
+
 Docker Compose startup has been verified with the API and Postgres containers running locally.
 
 ## Developer Setup
@@ -65,4 +95,15 @@ Run the local stack with Docker:
 ```bash
 docker compose up --build -d
 curl http://localhost:8000/health
+```
+
+Human validator API sketch:
+
+```bash
+curl "http://localhost:8000/validators/human_validator/cards?patch_panel_id=hello_world"
+curl "http://localhost:8000/validators/cards/<card_id>"
+curl -X POST "http://localhost:8000/validators/human_validator/cards/<card_id>/decision" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: validator-decision-1" \
+  -d '{"patch_panel_id":"hello_world","accepted":true,"score":9,"reason":"Approved"}'
 ```

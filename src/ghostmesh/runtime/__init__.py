@@ -3,6 +3,13 @@
 from ghostmesh.runtime.memory import InMemoryCardRuntime
 from ghostmesh.runtime.postgres import PostgresCardRuntime
 from ghostmesh.runtime.service import CardRuntime
-from ghostmesh.runtime.shadow import ShadowHarness
+from ghostmesh.runtime.shadow import ShadowHarness, ShadowPolicy, ShadowService
 
-__all__ = ["CardRuntime", "InMemoryCardRuntime", "PostgresCardRuntime", "ShadowHarness"]
+__all__ = [
+    "CardRuntime",
+    "InMemoryCardRuntime",
+    "PostgresCardRuntime",
+    "ShadowHarness",
+    "ShadowPolicy",
+    "ShadowService",
+]

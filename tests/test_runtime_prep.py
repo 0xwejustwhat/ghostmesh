@@ -40,14 +40,14 @@ def test_runtime_claim_submit_validate_move_flow() -> None:
         card_id=card.id,
         validator_id="human_validator",
         accepted=True,
-        output_pipe="validator_accept",
+        output_pipe="validator_reviewed",
         idempotency_key="validate-1",
     )
 
     assert same_card.id == card.id
     assert artifact.card_id == card.id
     assert event.payload["accepted"] is True
-    assert runtime.list_cards()[0].current_bucket == "done"
+    assert runtime.list_cards()[0].current_bucket == "junction_inbox"
     assert [entry.event_type for entry in runtime.card_history(card.id)] == [
         "card_created",
         "card_claimed",

@@ -25,6 +25,10 @@ class CardRuntime(Protocol):
 
     def list_cards(self) -> list[Card]: ...
 
+    def get_card(self, card_id: UUID) -> Card: ...
+
+    def get_lease(self, lease_id: UUID) -> Lease: ...
+
     def claim_card(
         self,
         *,
@@ -83,6 +87,16 @@ class CardRuntime(Protocol):
     ) -> Card: ...
 
     def card_history(self, card_id: UUID) -> list[CardEvent]: ...
+
+    def record_event(
+        self,
+        *,
+        card_id: UUID,
+        event_type: str,
+        actor_id: str | None = None,
+        payload: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> CardEvent: ...
 
 
 def validate_patch_panel(patch_panel: PatchPanel) -> PatchPanel:
