@@ -10,6 +10,7 @@ class Settings:
     environment: str = "development"
     database_url: str = "postgresql+psycopg://ghostmesh:ghostmesh@localhost:5432/ghostmesh"
     log_level: str = "INFO"
+    runtime_backend: str = "memory"
 
 
 @lru_cache
@@ -21,5 +22,5 @@ def get_settings() -> Settings:
             "postgresql+psycopg://ghostmesh:ghostmesh@localhost:5432/ghostmesh",
         ),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
+        runtime_backend=os.getenv("GHOSTMESH_RUNTIME_BACKEND", "memory"),
     )
-

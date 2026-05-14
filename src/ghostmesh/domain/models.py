@@ -51,7 +51,7 @@ class NodeDefinition(BaseModel):
 
 
 class EdgeDefinition(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     from_node: str = Field(alias="from")
     to_node: str = Field(alias="to")
@@ -120,6 +120,30 @@ class Card(BaseModel):
     current_bucket: str
     payload: dict[str, Any]
     metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class CardLocation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID = Field(default_factory=uuid4)
+    card_id: UUID
+    bucket: str
+    status: str = Field(default="active", pattern="^(active|pending|exited)$")
+    entered_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    accepted_at: datetime | None = None
+    exited_at: datetime | None = None
+
+
+class ValidationResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID = Field(default_factory=uuid4)
+    card_id: UUID
+    validator_id: str
+    accepted: bool
+    reason: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

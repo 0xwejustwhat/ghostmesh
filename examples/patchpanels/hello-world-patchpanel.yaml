@@ -46,7 +46,7 @@ pipe_bindings:
   intake_output:
     node: intake_source
     direction: output
-    bucket: intake
+    bucket: worker_inbox
   worker_input:
     node: example_worker
     direction: input
@@ -78,4 +78,3 @@ edges:
   - from: human_validator
     to: archive_sink
     on: accepted
-

@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from sqlalchemy import create_engine, select
+
+from ghostmesh.patchpanel import load_patch_panel
+from ghostmesh.persistence.tables import card_events, card_locations, metadata
+from ghostmesh.runtime import PostgresCardRuntime
+
+EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "patchpanels"
+
+
+def test_postgres_runtime_persists_card_location_and_evidence() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    metadata.create_all(engine)
+    runtime = PostgresCardRuntime(engine)
+    runtime.register_patch_panel(load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml"))
+
+    card = runtime.create_card(
+        patch_panel_id="hello_world",
+        payload={"title": "durable card"},
+        metadata={"priority": "normal"},
+        idempotency_key="create-durable-1",
+    )
+    same_card = runtime.create_card(
+        patch_panel_id="hello_world",
+        payload={"title": "ignored"},
+        idempotency_key="create-durable-1",
+    )
+    lease = runtime.claim_card(
+        input_pipe="worker_input",
+        worker_id="postgres-worker",
+        idempotency_key="claim-durable-1",
+    )
+    same_lease = runtime.claim_card(
+        input_pipe="worker_input",
+        worker_id="postgres-worker",
+        idempotency_key="claim-durable-1",
+    )
+    artifact = runtime.submit_artifact(
+        lease_id=lease.id,
+        output_pipe="worker_output",
+        payload={"draft": "durable artifact"},
+        idempotency_key="submit-durable-1",
+    )
+    history = runtime.card_history(card.id)
+
+    with engine.connect() as connection:
+        event_count = connection.execute(select(card_events.c.id)).all()
+        locations = connection.execute(
+            select(card_locations.c.bucket, card_locations.c.status).where(
+                card_locations.c.card_id == card.id
+            )
+        ).all()
+
+    assert same_card.id == card.id
+    assert same_lease.id == lease.id
+    assert artifact.card_id == card.id
+    assert [event.event_type for event in history] == [
+        "card_created",
+        "card_claimed",
+        "artifact_submitted",
+    ]
+    assert len(event_count) == 3
+    assert ("worker_inbox", "exited") in locations
+    assert ("validation_inbox", "active") in locations

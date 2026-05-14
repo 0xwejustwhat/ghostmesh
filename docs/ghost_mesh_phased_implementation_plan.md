@@ -10,11 +10,13 @@ This document preserves the existing implementation blueprint as source material
 
 Last updated: 2026-05-14
 
-- Phase 0 and Phase 1 are implemented.
+- Phase 0, Phase 1, Phase 2, and Phase 3 are implemented.
 - The repository now includes a Poetry-managed Python package, FastAPI app, Docker Compose configuration, Alembic scaffolding, structured logging setup, Ruff linting, Makefile commands, and baseline GitHub Actions CI.
 - Implemented Phase 1 scope includes Pydantic domain models, YAML/JSON Patch Panel loading, NetworkX-backed graph validation, example Patch Panels, and Pytest coverage.
-- Verification commands: `poetry run ruff check .`, `poetry run pytest`, `poetry run alembic --help`, `docker compose config`, `docker compose up --build -d`, `curl http://localhost:8000/health`, and `docker compose exec -T postgres pg_isready -U ghostmesh -d ghostmesh`.
-- Latest verification result: Ruff passed, 10 tests passed, Alembic CLI loaded, Docker Compose config validated, API and Postgres containers started, `/health` returned `{"status":"ok"}`, and Postgres accepted connections.
+- Phase 2 scope includes durable workflow versions, buckets, cards, card locations, artifacts, card events, validation results, leases, and idempotency records; a Postgres-backed card runtime; append-only evidence replay; source-node card creation; REST access to cards and history; a minimal pipe-aware `WorkerClient`; and a shadow card harness.
+- Phase 3 scope includes pipe-aware claim and submit flow, Postgres row-lock claim selection, lease renewal, lease release, lease expiry recovery, idempotent claim/submit/renew/release/validate/move operations, and REST endpoints for lease lifecycle actions.
+- Verification commands: `poetry run ruff check .`, `poetry run pytest`, `poetry run alembic upgrade head`, `docker compose config`, `docker compose up --build -d`, `curl http://localhost:8000/health`, and `docker compose exec -T postgres pg_isready -U ghostmesh -d ghostmesh`.
+- Latest verification result: Ruff passed, 19 tests passed, Alembic reports `20260514_0002 (head)`, Docker Compose config validated, API and Postgres containers started, `/health` returned `{"status":"ok"}`, `/cards` returned from the database-backed API, and Postgres accepted connections.
 
 ## Source Materials
 
@@ -114,6 +116,8 @@ Define the canonical data model and validate declarative Patch Panels before run
 
 ## Phase 2: Runtime State, Cards, Buckets, and Evidence Trail
 
+Implementation status: complete.
+
 ### Goal
 
 Create durable card state and append-only evidence before implementing worker movement.
@@ -137,6 +141,8 @@ Create durable card state and append-only evidence before implementing worker mo
 - Database tests prove events are not overwritten during normal operations.
 
 ## Phase 3: Claim, Lease, Submit, Validate, and Move
+
+Implementation status: complete.
 
 ### Goal
 
