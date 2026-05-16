@@ -4,6 +4,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+import structlog
+
 from ghostmesh.domain import ArtifactReference, Card, CardEvent, Lease, PatchPanel
 from ghostmesh.runtime.errors import ConflictError, NotFoundError
 from ghostmesh.runtime.service import (
@@ -16,6 +18,8 @@ from ghostmesh.runtime.service import (
     resolve_pipe_bucket,
     validate_patch_panel,
 )
+
+logger = structlog.get_logger(__name__)
 
 
 class InMemoryCardRuntime:
@@ -78,6 +82,9 @@ class InMemoryCardRuntime:
 
     def get_lease(self, lease_id: UUID) -> Lease:
         return self._get_lease(lease_id)
+
+    def list_leases(self) -> list[Lease]:
+        return list(self._leases.values())
 
     def claim_card(
         self,
@@ -354,6 +361,12 @@ class InMemoryCardRuntime:
 
     def _record_event(self, event: CardEvent) -> None:
         self._events.setdefault(event.card_id, []).append(event)
+        logger.info(
+            "card_event_recorded",
+            card_id=str(event.card_id),
+            event_type=event.event_type,
+            actor_id=event.actor_id,
+        )
 
     def _has_active_lease(self, card_id: UUID) -> bool:
         now = datetime.now(UTC)

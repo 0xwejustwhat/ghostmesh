@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
@@ -33,6 +34,8 @@ from ghostmesh.runtime.service import (
     resolve_pipe_bucket,
     validate_patch_panel,
 )
+
+logger = structlog.get_logger(__name__)
 
 
 class PostgresCardRuntime:
@@ -160,6 +163,11 @@ class PostgresCardRuntime:
     def get_lease(self, lease_id: UUID) -> Lease:
         with Session(self.engine) as session:
             return self._get_lease(session, lease_id)
+
+    def list_leases(self) -> list[Lease]:
+        with Session(self.engine) as session:
+            rows = session.execute(select(leases)).all()
+        return [self._lease_from_row(row._mapping) for row in rows]
 
     def claim_card(
         self,
@@ -596,6 +604,12 @@ class PostgresCardRuntime:
                 payload=event.payload,
                 occurred_at=event.occurred_at,
             )
+        )
+        logger.info(
+            "card_event_recorded",
+            card_id=str(event.card_id),
+            event_type=event.event_type,
+            actor_id=event.actor_id,
         )
 
     def _get_card(self, session: Session, card_id: UUID) -> Card:

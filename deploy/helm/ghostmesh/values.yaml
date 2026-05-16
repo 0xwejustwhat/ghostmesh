@@ -1,0 +1,14 @@
+image:
+  repository: ghostmesh
+  tag: local
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+env:
+  GHOSTMESH_ENVIRONMENT: production
+  GHOSTMESH_RUNTIME_BACKEND: postgres
+  LOG_LEVEL: INFO
+  DATABASE_URL: postgresql+psycopg://ghostmesh:ghostmesh@postgres:5432/ghostmesh

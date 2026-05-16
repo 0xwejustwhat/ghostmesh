@@ -21,6 +21,7 @@ from ghostmesh.domain import (
 )
 from ghostmesh.logging import configure_logging
 from ghostmesh.nodes import HumanValidationInput, NodeExecutor, WorkerExecutionInput
+from ghostmesh.observability import ObservabilityService
 from ghostmesh.runtime import (
     CardRuntime,
     InMemoryCardRuntime,
@@ -183,6 +184,46 @@ def create_app(settings: Settings | None = None, runtime: CardRuntime | None = N
             "environment": settings.environment,
             "database_configured": str(bool(settings.database_url)).lower(),
         }
+
+    @app.get("/ops/topology/{patch_panel_id}")
+    def operator_topology(patch_panel_id: str) -> dict[str, Any]:
+        return ObservabilityService(runtime=runtime).topology(patch_panel_id)
+
+    @app.get("/ops/cards/by-bucket")
+    def operator_cards_by_bucket() -> dict[str, list[Card]]:
+        return ObservabilityService(runtime=runtime).cards_by_bucket()
+
+    @app.get("/ops/buckets/load")
+    def operator_bucket_load() -> dict[str, int]:
+        return ObservabilityService(runtime=runtime).bucket_load()
+
+    @app.get("/ops/leases/active")
+    def operator_active_leases() -> list[dict[str, Any]]:
+        return ObservabilityService(runtime=runtime).active_leases()
+
+    @app.get("/ops/workers/activity")
+    def operator_worker_activity() -> dict[str, dict[str, int]]:
+        return ObservabilityService(runtime=runtime).worker_activity()
+
+    @app.get("/ops/validators/decisions")
+    def operator_validator_decisions() -> list[dict[str, Any]]:
+        return ObservabilityService(runtime=runtime).validator_decisions()
+
+    @app.get("/ops/workflow-versions")
+    def operator_workflow_versions() -> list[dict[str, Any]]:
+        return ObservabilityService(runtime=runtime).workflow_versions()
+
+    @app.get("/ops/failed-movements")
+    def operator_failed_movements() -> list[CardEvent]:
+        return ObservabilityService(runtime=runtime).failed_movements()
+
+    @app.get("/ops/metrics")
+    def operator_metrics() -> dict[str, Any]:
+        return ObservabilityService(runtime=runtime).metrics()
+
+    @app.get("/ops/dashboard/{patch_panel_id}")
+    def operator_dashboard(patch_panel_id: str) -> dict[str, Any]:
+        return ObservabilityService(runtime=runtime).dashboard(patch_panel_id)
 
     @app.get("/patchpanels")
     def list_patch_panels() -> list[PatchPanel]:

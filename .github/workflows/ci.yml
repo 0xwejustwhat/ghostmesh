@@ -9,6 +9,20 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ghostmesh
+          POSTGRES_USER: ghostmesh
+          POSTGRES_PASSWORD: ghostmesh
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ghostmesh -d ghostmesh"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -26,6 +40,14 @@ jobs:
 
       - name: Lint
         run: poetry run ruff check .
+
+      - name: Validate migrations
+        env:
+          DATABASE_URL: postgresql+psycopg://ghostmesh:ghostmesh@localhost:5432/ghostmesh
+        run: poetry run alembic upgrade head
+
+      - name: Validate Docker Compose
+        run: docker compose config
 
       - name: Test
         run: poetry run pytest

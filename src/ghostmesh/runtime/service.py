@@ -30,6 +30,8 @@ class CardRuntime(Protocol):
 
     def get_lease(self, lease_id: UUID) -> Lease: ...
 
+    def list_leases(self) -> list[Lease]: ...
+
     def claim_card(
         self,
         *,

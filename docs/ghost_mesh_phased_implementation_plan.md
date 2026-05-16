@@ -10,7 +10,7 @@ This document preserves the existing implementation blueprint as source material
 
 Last updated: 2026-05-14
 
-- Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 6.5, and Phase 7 are implemented.
+- Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 6.5, Phase 7, Phase 8, and Phase 9 are implemented.
 - The repository now includes a Poetry-managed Python package, FastAPI app, Docker Compose configuration, Alembic scaffolding, structured logging setup, Ruff linting, Makefile commands, and baseline GitHub Actions CI.
 - Implemented Phase 1 scope includes Pydantic domain models, YAML/JSON Patch Panel loading, NetworkX-backed graph validation, example Patch Panels, and Pytest coverage.
 - Phase 2 scope includes durable workflow versions, buckets, cards, card locations, artifact references, card events, validation results, leases, and idempotency records; a Postgres-backed card runtime; append-only evidence replay; source-node card creation; REST access to cards and history; a minimal pipe-aware `WorkerClient`; and a shadow card harness.
@@ -20,8 +20,10 @@ Last updated: 2026-05-14
 - Phase 6 scope includes shadow card links, sampling and max-parallel controls, production sink isolation for shadow cards, proposed mutation records, mutation validation gates, promotion gates, shadow comparison metrics, and REST endpoints for shadow and mutation flows.
 - Phase 6.5 scope removes artifact content from Postgres, replaces artifact payload submission with `ArtifactReference` lists, adds local Git/filesystem and S3-compatible artifact stores, validates artifact reference structure/count/roles through acceptance contracts, and documents the storage boundary.
 - Phase 7 scope adds controlled Source and Sink boundary contracts, webhook/API boundary endpoints, payload and metadata mapping, Source deduplication keys, Sink egress idempotency keys, external reference recording, MCP edge-adapter example configuration, and GitHub issue to notification webhook examples.
+- Phase 8 scope adds lifecycle event logging, read-only operator endpoints for topology, cards by bucket, bucket load, active leases, worker activity, validator decisions, workflow versions, failed movements, metrics, and a dashboard aggregate with Mermaid topology output.
+- Phase 9 scope adds public-ready architecture, API, SDK, deployment, workflow, and AI adoption documentation; contributor/community files; Docker and Helm packaging notes; CI migration and Compose checks; and agent-facing operational skills for workers, boundary adapters, validators, and workflow architect agents.
 - Verification commands: `poetry run ruff check .`, `poetry run pytest`, `poetry run alembic upgrade head`, `poetry run alembic current`, `docker compose config`, `docker compose up --build -d`, `curl http://localhost:8000/health`, `curl http://localhost:8000/cards`, and `docker compose exec -T postgres pg_isready -U ghostmesh -d ghostmesh`.
-- Latest verification result: Ruff passed and 35 tests passed for the Phase 7 implementation. Previous Docker/Alembic verification remains: Alembic reports `20260514_0004 (head)`, Docker Compose rebuilt and started the API/Postgres stack, `/health` returned `{"status":"ok"}`, `/cards` returned from the database-backed API, and Postgres accepted connections.
+- Latest verification result: Ruff passed, Docker Compose config validated, and 40 tests passed for the Phase 9 implementation. Previous Docker/Alembic verification remains: Alembic reports `20260514_0004 (head)`, Docker Compose rebuilt and started the API/Postgres stack, `/health` returned `{"status":"ok"}`, `/cards` returned from the database-backed API, and Postgres accepted connections.
 
 ## Source Materials
 
@@ -309,6 +311,8 @@ Connect Ghost Mesh to external systems through controlled Source and Sink bounda
 
 ## Phase 8: Observability, Dashboard, and Operational Readiness
 
+Implementation status: complete.
+
 ### Goal
 
 Make the mesh inspectable by operators and non-technical stakeholders.
@@ -332,6 +336,8 @@ Make the mesh inspectable by operators and non-technical stakeholders.
 
 ## Phase 9: Packaging, Documentation, and Open-Source Readiness
 
+Implementation status: complete.
+
 ### Goal
 
 Prepare the open-source core for contributors and enterprise evaluators.
@@ -347,6 +353,14 @@ Prepare the open-source core for contributors and enterprise evaluators.
 - Add Docker image build instructions and optional Helm chart stub.
 - Add CI checks for Poetry install, tests, migrations, and linting.
 - Document the expected path from human production to AI shadow to supervised AI production to exception-based human oversight.
+- Add agent-facing operational templates in `/docs/skills` so AI workers, validators, boundary adapters, and workflow architect agents can participate without mistaking Ghost Mesh for an agent orchestrator.
+
+### Agent Skills Documentation
+
+- Add `worker-skills.md` for regular Worker Nodes. It must teach agents that Ghost Mesh is not their orchestrator; workers are pipe-aware rather than graph-aware; workers only claim Cards from assigned input pipes and submit artifacts to assigned output pipes; workers must not route Cards, mutate workflows, publish externally, or bypass validators; workers must read the Card, follow the Acceptance Contract, produce the requested artifact, include evidence or proof, and fail explicitly when instructions, permissions, or required context are missing.
+- Add `boundary-adapter-skills.md` for Source and Sink Nodes. It must teach agents that Source Nodes only translate authorized external events into valid Cards; Sink Nodes only translate approved Cards or artifacts into external side effects; Source and Sink nodes are thin boundary adapters rather than workflow brains; they must enforce dedupe and idempotency keys; they must not perform production work unless explicitly modeled as a Worker Node; and they must return external references or durable proofs when pushing to outside systems.
+- Add `validator-skills.md` for AI or human-assisted Validator Nodes. It should focus validators on the Acceptance Contract; require structured accept/reject/score/reason output; avoid judging downstream business performance; and route only when explicitly modeled as a routing validator or Junction.
+- Add `workflow-architect-skills.md` for Hermes-style workflow architect agents. It should teach agents to create Patch Panels, buckets, routes, contracts, and node specs; keep workflow logic out of workers; propose mutations as Cards; and send mutations through shadow and promotion gates.
 
 ### Acceptance Criteria
 
@@ -355,6 +369,7 @@ Prepare the open-source core for contributors and enterprise evaluators.
 - CI validates the documented contributor workflow.
 - Documentation clearly distinguishes Ghost Mesh from agent orchestration frameworks.
 - Documentation clearly states that Poetry is the dependency and packaging workflow.
+- Agent-facing skill documentation exists for Worker, Source/Sink boundary adapter, Validator, and Workflow Architect roles.
 
 ## Test Strategy
 

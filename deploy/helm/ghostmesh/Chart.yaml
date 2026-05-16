@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ghostmesh
+description: Ghost Mesh API Helm chart stub
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

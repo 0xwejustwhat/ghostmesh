@@ -4,7 +4,7 @@ Ghost Mesh is a graph-native accountability substrate for human and AI work.
 
 ## Current Implementation Status
 
-Phase 0 through Phase 6.5 are implemented.
+Phase 0 through Phase 9 are implemented.
 
 Phase 0 foundation:
 
@@ -85,7 +85,41 @@ Phase 6.5 artifact storage boundary:
 - Acceptance contract rules can require artifact reference structure, count, and roles
 - Migration `20260514_0004` removes the legacy artifact payload column and marks legacy rows for manual rehydration
 
+Phase 7 boundary adapters:
+
+- Controlled Source and Sink boundary contracts
+- Webhook/API boundary endpoints at `/boundaries/source` and `/boundaries/sink`
+- Source deduplication keys and Sink egress idempotency keys
+- Payload and metadata mapping for external systems
+- External reference recording for side effects
+- GitHub issue intake and notification webhook example
+- MCP documented as an edge integration mechanism, not the internal runtime
+
+Phase 8 observability:
+
+- Read-only operator endpoints under `/ops/...`
+- Topology, Mermaid graph output, Cards by bucket, bucket load, active leases, worker activity, validator decisions, workflow versions, failed movements, metrics, and dashboard aggregate
+- Structured lifecycle event logging
+
+Phase 9 open-source readiness:
+
+- Architecture, API, SDK, deployment, workflow, and AI adoption documentation
+- Agent-facing skills in `docs/skills`
+- Contributing guide, code of conduct, roadmap, and MIT license
+- Docker image instructions and Helm chart stub
+- CI validates Poetry install, Ruff, Alembic migrations, Docker Compose config, and tests
+
 Docker Compose startup has been verified with the API and Postgres containers running locally.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [REST API](docs/api.md)
+- [Worker SDK](docs/worker-sdk.md)
+- [Deployment](docs/deployment.md)
+- [Example workflows](docs/workflows.md)
+- [Human to AI operating path](docs/ai-adoption-path.md)
+- [Agent skills](docs/skills)
 
 ## Developer Setup
 
