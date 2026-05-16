@@ -46,12 +46,12 @@ Phase 3 card movement:
 
 Phase 4 node execution:
 
-- MVP `NodeExecutor` for Source, Worker, Human Validator, Junction, and Sink nodes
-- Deterministic junction routing from validator evidence
+- MVP `NodeExecutor` for Source, Worker, Validator, and Sink nodes
+- Routing validators with multiple authorized exit pipes
 - Sink execution evidence with optional external references
-- Canonical Source to Worker to Human Validator to Junction to Sink workflow
+- Canonical Source to Worker to routing Validator to Sink workflow
 - REST endpoints under `/nodes/.../execute`
-- Tests covering accepted and rejected junction routes plus API node execution
+- Tests covering accepted and rejected validator routes plus API node execution
 
 Phase 5 worker and validator surfaces:
 

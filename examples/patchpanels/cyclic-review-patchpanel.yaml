@@ -28,12 +28,16 @@ nodes:
       - draft_output
   - id: review_validator
     type: validator
+    validator_kind: routing
     input_pipes:
       - review_input
     output_pipes:
       - review_accept
       - review_reject
     acceptance_contract: publishability
+    config:
+      accept_exits:
+        - review_accept
   - id: publish_sink
     type: sink
     input_pipes:
@@ -78,8 +82,7 @@ edges:
     on: artifact_submitted
   - from: review_validator
     to: publish_sink
-    on: accepted
+    on: review_accept
   - from: review_validator
     to: draft_worker
-    on: rejected
-
+    on: review_reject

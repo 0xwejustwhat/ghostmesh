@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from ghostmesh.api.main import create_app
-from ghostmesh.nodes import HumanValidationInput, NodeExecutor, WorkerExecutionInput
+from ghostmesh.domain import PatchPanel
+from ghostmesh.nodes import NodeExecutor, ValidatorExecutionInput, WorkerExecutionInput
 from ghostmesh.patchpanel import load_patch_panel
 from ghostmesh.runtime import InMemoryCardRuntime
+from ghostmesh.runtime.errors import InvalidOperationError
 from tests.helpers import artifact_ref
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "patchpanels"
@@ -31,16 +35,16 @@ def test_node_executor_runs_canonical_workflow_to_sink() -> None:
             artifact_refs=[artifact_ref(card.id)],
         )
     )
-    validation = executor.execute_human_validator(
-        HumanValidationInput(
+    validation = executor.execute_validator(
+        ValidatorExecutionInput(
             card_id=card.id,
             validator_id="human_validator",
             accepted=True,
+            selected_exit="publish",
             score=9,
             reason="Looks good",
         )
     )
-    decision = executor.execute_junction(card_id=card.id, junction_id="routing_junction")
     sink = executor.execute_sink(
         card_id=card.id,
         sink_id="archive_sink",
@@ -49,7 +53,8 @@ def test_node_executor_runs_canonical_workflow_to_sink() -> None:
 
     assert artifact_refs[0].card_id == card.id
     assert validation.payload["accepted"] is True
-    assert decision.selected_bucket == "done"
+    assert validation.payload["output_pipe"] == "publish"
+    assert runtime.get_card(card.id).current_bucket == "done"
     assert sink.external_reference == "archive://card"
     assert [event.event_type for event in runtime.card_history(card.id)] == [
         "card_created",
@@ -57,36 +62,79 @@ def test_node_executor_runs_canonical_workflow_to_sink() -> None:
         "card_claimed",
         "artifact_submitted",
         "card_validated",
-        "card_moved",
-        "junction_routed",
         "sink_executed",
     ]
 
 
-def test_junction_routes_rejected_cards_to_rejected_bucket() -> None:
+def test_routing_validator_routes_rejected_cards_to_rejected_bucket() -> None:
     patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
     runtime = InMemoryCardRuntime()
     runtime.register_patch_panel(patch_panel)
     executor = NodeExecutor(patch_panel=patch_panel, runtime=runtime)
     card = executor.execute_source(source_id="intake_source", payload={"title": "Reject"})
 
-    executor.execute_human_validator(
-        HumanValidationInput(
+    validation = executor.execute_validator(
+        ValidatorExecutionInput(
             card_id=card.id,
             validator_id="human_validator",
             accepted=False,
+            selected_exit="reject",
             score=3,
             reason="Not ready",
         )
     )
-    decision = executor.execute_junction(card_id=card.id, junction_id="routing_junction")
 
-    assert decision.selected_pipe == "junction_reject"
-    assert decision.selected_bucket == "rejected"
-    assert decision.card.current_bucket == "rejected"
+    assert validation.payload["output_pipe"] == "reject"
+    assert runtime.get_card(card.id).current_bucket == "rejected"
 
 
-def test_node_execution_api_runs_source_worker_validator_junction_sink() -> None:
+def test_routing_validator_rejects_undeclared_selected_exit() -> None:
+    patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
+    runtime = InMemoryCardRuntime()
+    runtime.register_patch_panel(patch_panel)
+    executor = NodeExecutor(patch_panel=patch_panel, runtime=runtime)
+    card = executor.execute_source(source_id="intake_source", payload={"title": "Bad exit"})
+
+    with pytest.raises(InvalidOperationError, match="not declared"):
+        executor.execute_validator(
+            ValidatorExecutionInput(
+                card_id=card.id,
+                validator_id="human_validator",
+                selected_exit="missing_exit",
+            )
+        )
+
+
+def test_routing_validator_rejects_selected_exit_without_pipe_binding() -> None:
+    registered_patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
+    patch_panel = registered_patch_panel.model_copy(deep=True)
+    patch_panel.pipe_bindings.pop("publish")
+    runtime = InMemoryCardRuntime()
+    runtime.register_patch_panel(registered_patch_panel)
+    executor = NodeExecutor(patch_panel=patch_panel, runtime=runtime)
+    card = executor.execute_source(source_id="intake_source", payload={"title": "No binding"})
+
+    with pytest.raises(InvalidOperationError, match="missing a Patch Panel binding"):
+        executor.execute_validator(
+            ValidatorExecutionInput(
+                card_id=card.id,
+                validator_id="human_validator",
+                selected_exit="publish",
+            )
+        )
+
+
+def test_legacy_junction_node_type_is_rejected() -> None:
+    raw_patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml").model_dump(
+        mode="json"
+    )
+    raw_patch_panel["nodes"][2]["type"] = "junction"
+
+    with pytest.raises(ValidationError):
+        PatchPanel.model_validate(raw_patch_panel)
+
+
+def test_node_execution_api_runs_source_worker_routing_validator_sink() -> None:
     runtime = InMemoryCardRuntime()
     client = TestClient(create_app(runtime=runtime))
     patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
@@ -115,22 +163,15 @@ def test_node_execution_api_runs_source_worker_validator_junction_sink() -> None
         },
     )
     validator_response = client.post(
-        "/nodes/validator/human/execute",
+        "/nodes/validator/execute",
         json={
             "patch_panel_id": "hello_world",
             "card_id": card_id,
             "validator_id": "human_validator",
             "accepted": True,
+            "selected_exit": "publish",
             "score": 8,
             "reason": "accepted",
-        },
-    )
-    junction_response = client.post(
-        "/nodes/junction/execute",
-        json={
-            "patch_panel_id": "hello_world",
-            "card_id": card_id,
-            "junction_id": "routing_junction",
         },
     )
     sink_response = client.post(
@@ -145,7 +186,6 @@ def test_node_execution_api_runs_source_worker_validator_junction_sink() -> None
 
     assert worker_response.status_code == 200, worker_response.text
     assert validator_response.status_code == 200, validator_response.text
-    assert junction_response.status_code == 200, junction_response.text
     assert sink_response.status_code == 200, sink_response.text
-    assert junction_response.json()["selected_bucket"] == "done"
+    assert validator_response.json()["payload"]["output_pipe"] == "publish"
     assert sink_response.json()["external_reference"] == "archive://api-card"

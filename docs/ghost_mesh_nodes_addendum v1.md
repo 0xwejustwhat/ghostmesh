@@ -100,7 +100,7 @@ Mapping:
 Petri Net                Ghost Mesh
 ---------------------------------------------
 Places                   Buckets
-Transitions              Workers / Validators / Junctions
+Transitions              Workers / Validators
 Tokens                   Cards
 Arcs                     Routes
 Guards                   Acceptance Contracts / Rules
@@ -384,7 +384,14 @@ Examples:
 
 ### Routing Validators / Junctions
 
-Determine which edge fires next.
+Determine which edge fires next by selecting one of the validator's declared output
+pipes.
+
+Ghost Mesh does not require separate Junction Nodes. Junctions are routing validators:
+Validator Nodes with multiple authorized exit pipes. They may route Cards
+algorithmically, subjectively, or through hybrid human/AI judgment, but they remain
+validators because they evaluate the Card's current state against a routing contract
+and select the next permitted path.
 
 Examples:
 
@@ -408,30 +415,6 @@ Examples:
 - Did the new routing rule reduce cost per accepted outcome?
 
 Mutation Validators do not propose changes. They evaluate whether proposed changes earned promotion.
-
----
-
-## Junction Nodes
-
-Routing and branching nodes.
-
-Junctions determine:
-
-```text
-Which edge fires next?
-```
-
-Junctions may use:
-
-- validator results,
-- thresholds,
-- metadata,
-- scores,
-- priorities,
-- escalation rules,
-- or workflow state.
-
-These behave similarly to guarded transitions in workflow systems.
 
 ---
 
@@ -690,7 +673,7 @@ Ghost Mesh can begin with extremely simple validation semantics.
 Initial workflows may use:
 
 ```text
-Worker → Human Validator → Junction
+Worker → Routing Validator
 ```
 
 This is enough to:
@@ -797,7 +780,7 @@ The core operational principle can be summarized as:
 Sources inject work.
 Workers transform work.
 Validators define acceptable reality.
-Junctions route work.
+Routing Validators route work.
 Learning proposes change.
 Shadow lanes prove change.
 Sinks transfer accountability.
@@ -829,7 +812,6 @@ Boundary Layer
 Execution Layer
   - Workers
   - Validators
-  - Junctions
 
 Evolution Layer
   - Learning Nodes
@@ -862,4 +844,3 @@ and structured enough for AI systems to generate, test, and improve.
 ```
 
 This is the evolving node philosophy of Ghost Mesh.
-

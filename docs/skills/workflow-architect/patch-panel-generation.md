@@ -9,7 +9,7 @@
 - Every binding points to a declared bucket.
 - Workers have explicit input and output pipes.
 - Validators have clear Acceptance Contracts.
-- Junction routes are deterministic.
+- Routing validator exits are deterministic.
 - Source/Sink boundaries define authorization and idempotency.
 
 ## Minimal Shape

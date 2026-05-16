@@ -27,21 +27,15 @@ class WorkerExecutionInput(BaseModel):
     idempotency_key: str | None = None
 
 
-class HumanValidationInput(BaseModel):
+class ValidatorExecutionInput(BaseModel):
     card_id: UUID
     validator_id: str
-    accepted: bool
+    selected_exit: str | None = None
+    accepted: bool | None = None
     score: int | None = Field(default=None, ge=0, le=10)
     reason: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
     idempotency_key: str | None = None
-
-
-@dataclass(frozen=True)
-class JunctionDecision:
-    card: Card
-    selected_pipe: str
-    selected_bucket: str
-    accepted: bool
 
 
 @dataclass(frozen=True)
@@ -110,53 +104,23 @@ class NodeExecutor:
             raise InvalidOperationError("worker execution did not submit artifacts")
         return artifact_refs
 
-    def execute_human_validator(self, request: HumanValidationInput) -> CardEvent:
+    def execute_validator(self, request: ValidatorExecutionInput) -> CardEvent:
         node = self._node(request.validator_id, NodeType.VALIDATOR)
+        selected_exit = request.selected_exit
+        if selected_exit is None and self._requires_selected_exit(node):
+            raise InvalidOperationError(
+                f"routing validator '{node.id}' requires selected_exit"
+            )
+        if selected_exit is not None:
+            self._ensure_validator_exit(node, selected_exit)
+        accepted = self._validator_accepted(node, request)
         return self.runtime.validate_card(
             card_id=request.card_id,
             validator_id=node.id,
-            accepted=request.accepted,
-            reason=request.reason,
-            output_pipe=None,
-            idempotency_key=request.idempotency_key,
-        )
-
-    def execute_junction(
-        self,
-        *,
-        card_id: UUID,
-        junction_id: str,
-        idempotency_key: str | None = None,
-    ) -> JunctionDecision:
-        node = self._node(junction_id, NodeType.JUNCTION)
-        validation = self._latest_validation(card_id)
-        accepted = bool(validation.payload.get("accepted"))
-        selected_pipe = self._select_junction_pipe(node, accepted)
-        selected_bucket = self.patch_panel.pipe_bindings[selected_pipe].bucket
-        moved = self.runtime.move_card(
-            card_id=card_id,
-            to_bucket=selected_bucket,
-            actor_id=node.id,
-            reason="junction_route",
-            idempotency_key=idempotency_key,
-        )
-        self.runtime.record_event(
-            card_id=card_id,
-            event_type="junction_routed",
-            actor_id=node.id,
-            payload={
-                "junction_id": node.id,
-                "selected_pipe": selected_pipe,
-                "selected_bucket": selected_bucket,
-                "accepted": accepted,
-            },
-            idempotency_key=f"{idempotency_key}:junction" if idempotency_key else None,
-        )
-        return JunctionDecision(
-            card=moved,
-            selected_pipe=selected_pipe,
-            selected_bucket=selected_bucket,
             accepted=accepted,
+            reason=request.reason,
+            output_pipe=selected_exit,
+            idempotency_key=request.idempotency_key,
         )
 
     def execute_sink(
@@ -201,25 +165,33 @@ class NodeExecutor:
             raise NotFoundError(f"pipe '{pipe}' is not bound to a node")
         return self._node(binding.node, expected_type)
 
-    def _latest_validation(self, card_id: UUID) -> CardEvent:
-        for event in reversed(self.runtime.card_history(card_id)):
-            if event.event_type == "card_validated":
-                return event
-        raise NotFoundError(f"card '{card_id}' has no validation event")
+    def _ensure_validator_exit(self, node: NodeDefinition, selected_exit: str) -> None:
+        if selected_exit not in node.output_pipes:
+            raise InvalidOperationError(
+                f"exit pipe '{selected_exit}' is not declared by validator '{node.id}'"
+            )
+        binding = self.patch_panel.pipe_bindings.get(selected_exit)
+        if binding is None:
+            raise InvalidOperationError(
+                f"selected exit pipe '{selected_exit}' is missing a Patch Panel binding"
+            )
+        if binding.node != node.id or binding.direction != "output":
+            raise InvalidOperationError(
+                f"selected exit pipe '{selected_exit}' is not an output binding for validator "
+                f"'{node.id}'"
+            )
 
-    def _select_junction_pipe(self, node: NodeDefinition, accepted: bool) -> str:
-        routes = node.config.get("routes", {})
-        route_key = "accepted" if accepted else "rejected"
-        selected_pipe = routes.get(route_key)
-        if not isinstance(selected_pipe, str):
+    def _requires_selected_exit(self, node: NodeDefinition) -> bool:
+        return node.validator_kind == "routing" or len(node.output_pipes) > 1
+
+    def _validator_accepted(self, node: NodeDefinition, request: ValidatorExecutionInput) -> bool:
+        if request.accepted is not None:
+            return request.accepted
+        if request.selected_exit is None:
             raise InvalidOperationError(
-                f"junction '{node.id}' is missing route '{route_key}'"
+                f"validator '{node.id}' requires either accepted or selected_exit"
             )
-        if selected_pipe not in node.output_pipes:
-            raise InvalidOperationError(
-                f"junction '{node.id}' route '{route_key}' uses undeclared pipe "
-                f"'{selected_pipe}'"
-            )
-        if selected_pipe not in self.patch_panel.pipe_bindings:
-            raise InvalidOperationError(f"junction pipe '{selected_pipe}' is not bound")
-        return selected_pipe
+        accept_exits = node.config.get("accept_exits")
+        if isinstance(accept_exits, list):
+            return request.selected_exit in accept_exits
+        return True

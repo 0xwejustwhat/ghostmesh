@@ -22,7 +22,7 @@ This sprint plan synthesizes:
 - Current Phase 0-9 implementation status in this repository.
 - `ghost_mesh_participant_roles_and_authority_addendum_v_1.md`.
 - The provided conversational workflow genesis use-case notes, interpreted as an external-client pattern rather than a runtime primitive.
-- The architecture verification discussion that confirmed pipe-aware workers, artifact reference boundaries, shadow isolation, graph validation, junction routing, and idempotency are already in good shape.
+- The architecture verification discussion that confirmed pipe-aware workers, artifact reference boundaries, shadow isolation, graph validation, routing validators, and idempotency are already in good shape.
 
 ## Companion Architecture Documents
 
@@ -41,7 +41,7 @@ Implementation work should update these architecture documents when a design dec
 - Authority is explicit, scoped, versioned, and auditable.
 - No participant receives implicit global authority.
 - Workers remain pipe-aware and Patch Panels remain graph-aware.
-- Routes remain dumb edges. Junctions and routing validators decide movement.
+- Routes remain dumb edges. Routing validators decide movement.
 - No named assistant, agent framework, or conversational product is a runtime primitive. External clients are ordinary participants using uniform REST/MCP boundaries and scoped permissions.
 - Patch Panels must remain explicit, versioned, portable, inspectable, and governable.
 - Evidence remains append-only. Deletion is modeled primarily as state transition or redaction.
@@ -208,7 +208,7 @@ Architecture reference: `docs/participant_authority_architecture.md`.
   - Workflow Designer
   - Worker
   - Validator
-  - Routing Validator / Junction Operator
+  - Routing Validator
   - Source Operator
   - Sink Operator
   - Reviewer / Approver

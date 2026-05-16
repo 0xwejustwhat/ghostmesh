@@ -443,6 +443,7 @@ class PostgresCardRuntime:
                 validator_id=validator_id,
                 accepted=accepted,
                 reason=reason,
+                output_pipe=output_pipe,
                 payload={"output_pipe": output_pipe} if output_pipe else {},
             )
             session.execute(
@@ -452,6 +453,7 @@ class PostgresCardRuntime:
                     validator_id=result.validator_id,
                     accepted=result.accepted,
                     reason=result.reason,
+                    output_pipe=result.output_pipe,
                     payload=result.payload,
                     created_at=result.created_at,
                 )

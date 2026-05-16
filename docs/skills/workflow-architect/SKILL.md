@@ -27,7 +27,7 @@ Create Patch Panels, buckets, routes, contracts, and node specs. Keep workflow l
 2. Define nodes with types and pipes.
 3. Define pipe bindings.
 4. Define acceptance contracts.
-5. Define deterministic edges and Junction routes.
+5. Define deterministic edges and routing validator exits.
 6. Define Source/Sink boundary contracts.
 7. Validate graph mentally and with runtime registration.
 8. Register Patch Panel.

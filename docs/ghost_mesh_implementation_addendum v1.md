@@ -52,10 +52,13 @@ Nodes represent typed components in the workflow graph, including:
 - Source Nodes
 - Worker Nodes
 - Validator Nodes
-- Junction Nodes
 - Learning Nodes
 - Sink Nodes
 - Subworkflow Nodes
+
+Junctions are routing validators, not a separate node category: Validator Nodes with
+multiple authorized exit pipes. The Patch Panel declares allowed exits, and the
+validator selects the permitted path for the Card.
 
 Buckets remain the places where Cards wait, but in the technical schema they are usually represented as part of node configuration rather than as the full node taxonomy.
 
@@ -172,11 +175,11 @@ edges:
 
   - from: approval
     to: publish_sink
-    on: accepted
+    on: publish
 
   - from: approval
     to: draft
-    on: rejected
+    on: rewrite
 ```
 
 This declarative approach has major advantages:
@@ -550,7 +553,7 @@ Ghost Mesh is highly legible to AI systems.
 The abstraction:
 
 ```text
-Card → Bucket → Worker → Validator → Junction → Shadow → Promotion
+Card → Bucket → Worker → Routing Validator → Shadow → Promotion
 ```
 
 is simple enough for AI to reason about structurally.
@@ -653,4 +656,3 @@ Production only accepts proven change.
 ```
 
 This is the operational core of Ghost Mesh.
-

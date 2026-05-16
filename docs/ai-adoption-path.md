@@ -12,7 +12,7 @@ AI workers run on shadow Cards linked to production Cards. Shadow lanes cannot e
 
 ## 3. Supervised AI Production
 
-After shadow results are validated, AI workers may receive production leases for narrow pipes. Validators and Junctions remain explicit controls.
+After shadow results are validated, AI workers may receive production leases for narrow pipes. Validators, including routing validators, remain explicit controls.
 
 ## 4. Exception-Based Oversight
 

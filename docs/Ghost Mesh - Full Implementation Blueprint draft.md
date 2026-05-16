@@ -58,13 +58,13 @@
 
 **Phase 2: Full Node Taxonomy & Validation (Weeks 4-6)**
 
-**Goal:** All 7 node types + Acceptance Contracts.
+**Goal:** Core node taxonomy + Acceptance Contracts.
 
 **Deliverables**
 
-- Abstract BaseNode + concrete implementations (Source, Worker, Validator, Junction, Learning, Sink, Subworkflow)
+- Abstract BaseNode + concrete implementations (Source, Worker, Validator, Learning, Sink, Subworkflow)
 - AcceptanceContract engine (Pydantic + custom rules + human hook)
-- Junction routing logic (rule-based + score-based)
+- Routing validator logic (rule-based + score-based)
 - Subworkflow support (recursive Patch Panel execution)
 - Human validator UI stub (simple React Flow + form)
 - Node-specific redaction hooks
@@ -72,12 +72,12 @@
 **Key User Stories**
 
 - As a Validator (human), I can review a Card and accept/reject with reason.
-- As a Junction, I can route based on validator score or metadata.
+- As a routing Validator, I can route based on score or metadata.
 - As a workflow designer, I can nest subworkflows.
 
 **Acceptance Criteria**
 
-- All 7 node types can be declared in YAML and executed
+- Core node types can be declared in YAML and executed
 - Acceptance Contracts are enforceable and versioned
 - Human + AI worker symmetry is complete
 

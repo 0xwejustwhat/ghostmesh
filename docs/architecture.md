@@ -17,15 +17,20 @@ Ghost Mesh is a graph-native accountability runtime for human and AI work. It is
 
 - **Source** admits authorized external or internal work into the mesh.
 - **Worker** transforms Cards into artifact references through assigned pipes.
-- **Validator** evaluates against an Acceptance Contract.
-- **Junction** routes deterministically from evidence.
+- **Validator** evaluates against an Acceptance Contract and may route Cards through one of its authorized output pipes.
 - **Learning** proposes mutations but never mutates production directly.
 - **Sink** performs controlled egress and records external references.
 - **Subworkflow** represents nested workflow structure for later expansion.
 
+Ghost Mesh does not require separate Junction Nodes. Junctions are routing validators:
+Validator Nodes with multiple authorized exit pipes. They may route Cards
+algorithmically, subjectively, or through hybrid human/AI judgment, but they remain
+validators because they evaluate the Card's current state against a routing contract
+and select the next permitted path.
+
 ## Safety Rules
 
-Workers are pipe-aware, not graph-aware. They must not route Cards, bypass validators, publish externally, or change workflows. Patch Panels own routing. Validators own acceptance decisions. Sink nodes own production side effects. Learning and workflow architect agents propose changes through Mutation Cards, shadow lanes, and promotion gates.
+Workers are pipe-aware, not graph-aware. They must not route Cards, bypass validators, publish externally, or change workflows. Patch Panels declare the allowed exits, and Validators select permitted routes. Sink nodes own production side effects. Learning and workflow architect agents propose changes through Mutation Cards, shadow lanes, and promotion gates.
 
 ## Storage Boundary
 

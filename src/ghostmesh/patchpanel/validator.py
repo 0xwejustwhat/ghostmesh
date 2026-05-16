@@ -26,6 +26,7 @@ class PatchPanelValidator:
 
         self._validate_contract_references(patch_panel, contract_ids, errors)
         self._validate_edges(patch_panel, node_ids, errors)
+        self._validate_validator_edges(patch_panel, errors)
         self._validate_pipe_bindings(patch_panel, node_ids, bucket_ids, errors)
 
         graph = self._build_graph(patch_panel)
@@ -81,6 +82,26 @@ class PatchPanelValidator:
                 errors.append(f"edge from '{edge.from_node}' references an unknown node")
             if edge.to_node not in node_ids:
                 errors.append(f"edge to '{edge.to_node}' references an unknown node")
+
+    def _validate_validator_edges(
+        self,
+        patch_panel: PatchPanel,
+        errors: list[str],
+    ) -> None:
+        validators = {
+            node.id: set(node.output_pipes)
+            for node in patch_panel.nodes
+            if node.type == NodeType.VALIDATOR
+        }
+        for edge in patch_panel.edges:
+            output_pipes = validators.get(edge.from_node)
+            if output_pipes is None:
+                continue
+            if edge.on not in output_pipes:
+                errors.append(
+                    f"validator edge from '{edge.from_node}' uses exit '{edge.on}' "
+                    "that is not declared in output_pipes"
+                )
 
     def _validate_pipe_bindings(
         self,
@@ -170,4 +191,3 @@ class PatchPanelValidator:
         for node in patch_panel.nodes:
             if node.id not in sink_ids and graph.out_degree(node.id) == 0:
                 errors.append(f"node '{node.id}' is a dead end and is not a sink")
-

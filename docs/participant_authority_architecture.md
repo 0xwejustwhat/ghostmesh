@@ -51,7 +51,7 @@ Examples:
 - Workflow Designer
 - Worker
 - Validator
-- Routing Validator / Junction Operator
+- Routing Validator
 - Source Operator
 - Sink Operator
 - Reviewer / Approver

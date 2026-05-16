@@ -43,17 +43,22 @@ nodes:
       mode: workflow_design
   - id: patch_panel_validator
     type: validator
+    validator_kind: objective
     input_pipes:
       - proposal_validation_input
     output_pipes:
       - proposal_validated
   - id: governance_reviewer
     type: validator
+    validator_kind: routing
     input_pipes:
       - governance_review_input
     output_pipes:
       - proposal_approved
       - proposal_rejected
+    config:
+      accept_exits:
+        - proposal_approved
   - id: registry_publication_sink
     type: sink
     input_pipes:
@@ -110,7 +115,7 @@ edges:
     on: artifact_submitted
   - from: patch_panel_validator
     to: governance_reviewer
-    on: validated
+    on: proposal_validated
   - from: governance_reviewer
     to: registry_publication_sink
-    on: approved
+    on: proposal_approved

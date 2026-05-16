@@ -5,7 +5,13 @@ from pathlib import Path
 from sqlalchemy import create_engine, select
 
 from ghostmesh.patchpanel import load_patch_panel
-from ghostmesh.persistence.tables import artifacts, card_events, card_locations, metadata
+from ghostmesh.persistence.tables import (
+    artifacts,
+    card_events,
+    card_locations,
+    metadata,
+    validation_results,
+)
 from ghostmesh.runtime import PostgresCardRuntime
 from tests.helpers import artifact_ref
 
@@ -45,6 +51,13 @@ def test_postgres_runtime_persists_card_location_and_evidence() -> None:
         artifact_refs=[artifact_ref(card.id)],
         idempotency_key="submit-durable-1",
     )
+    validation_event = runtime.validate_card(
+        card_id=card.id,
+        validator_id="human_validator",
+        accepted=True,
+        output_pipe="publish",
+        idempotency_key="validate-durable-1",
+    )
     history = runtime.card_history(card.id)
 
     with engine.connect() as connection:
@@ -55,18 +68,24 @@ def test_postgres_runtime_persists_card_location_and_evidence() -> None:
             )
         ).all()
         artifact_rows = connection.execute(select(artifacts)).all()
+        validation_rows = connection.execute(select(validation_results)).all()
 
     assert same_card.id == card.id
     assert same_lease.id == lease.id
     assert artifact_refs[0].card_id == card.id
     assert artifact_refs[0].content_hash.startswith("sha256:")
+    assert validation_event.payload["output_pipe"] == "publish"
     assert artifact_rows[0]._mapping["storage_ref"].startswith("git:working-tree:")
+    assert validation_rows[0]._mapping["output_pipe"] == "publish"
     assert "payload" not in artifacts.c
     assert [event.event_type for event in history] == [
         "card_created",
         "card_claimed",
         "artifact_submitted",
+        "card_moved",
+        "card_validated",
     ]
-    assert len(event_count) == 3
+    assert len(event_count) == 5
     assert ("worker_inbox", "exited") in locations
-    assert ("validation_inbox", "active") in locations
+    assert ("validation_inbox", "exited") in locations
+    assert ("done", "active") in locations

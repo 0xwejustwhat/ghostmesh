@@ -45,7 +45,7 @@ from ghostmesh.domain import (
 )
 from ghostmesh.genesis import GenesisService
 from ghostmesh.logging import configure_logging
-from ghostmesh.nodes import HumanValidationInput, NodeExecutor, WorkerExecutionInput
+from ghostmesh.nodes import NodeExecutor, ValidatorExecutionInput, WorkerExecutionInput
 from ghostmesh.observability import ObservabilityService
 from ghostmesh.registry import (
     InMemoryPatchPanelProposalStore,
@@ -120,19 +120,15 @@ class WorkerExecutionRequest(BaseModel):
     lease_seconds: int = 300
 
 
-class HumanValidationExecutionRequest(BaseModel):
+class ValidatorExecutionRequest(BaseModel):
     patch_panel_id: str
     card_id: UUID
     validator_id: str
-    accepted: bool
+    accepted: bool | None = None
+    selected_exit: str | None = None
     score: int | None = Field(default=None, ge=0, le=10)
     reason: str | None = None
-
-
-class JunctionExecutionRequest(BaseModel):
-    patch_panel_id: str
-    card_id: UUID
-    junction_id: str
+    payload: dict[str, Any] = Field(default_factory=dict)
 
 
 class SinkExecutionRequest(BaseModel):
@@ -172,6 +168,7 @@ class MutationPromotionRequest(BaseModel):
 class HumanValidatorDecisionRequest(BaseModel):
     patch_panel_id: str
     accepted: bool
+    selected_exit: str | None = None
     score: int | None = Field(default=None, ge=0, le=10)
     reason: str | None = None
 
@@ -1072,11 +1069,12 @@ def create_app(
             context={"patch_panel_id": request.patch_panel_id, "validator_id": validator_id},
         )
         executor = _executor(runtime, request.patch_panel_id)
-        return executor.execute_human_validator(
-            HumanValidationInput(
+        return executor.execute_validator(
+            ValidatorExecutionInput(
                 card_id=card_id,
                 validator_id=validator_id,
                 accepted=request.accepted,
+                selected_exit=request.selected_exit,
                 score=request.score,
                 reason=request.reason,
                 idempotency_key=idempotency_key,
@@ -1128,9 +1126,9 @@ def create_app(
             )
         )
 
-    @app.post("/nodes/validator/human/execute")
-    def execute_human_validator(
-        request: HumanValidationExecutionRequest,
+    @app.post("/nodes/validator/execute")
+    def execute_validator(
+        request: ValidatorExecutionRequest,
         http_request: Request,
         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     ) -> CardEvent:
@@ -1145,34 +1143,18 @@ def create_app(
             },
         )
         executor = _executor(runtime, request.patch_panel_id)
-        return executor.execute_human_validator(
-            HumanValidationInput(
+        return executor.execute_validator(
+            ValidatorExecutionInput(
                 card_id=request.card_id,
                 validator_id=request.validator_id,
                 accepted=request.accepted,
+                selected_exit=request.selected_exit,
                 score=request.score,
                 reason=request.reason,
+                payload=request.payload,
                 idempotency_key=idempotency_key,
             )
         )
-
-    @app.post("/nodes/junction/execute")
-    def execute_junction(
-        request: JunctionExecutionRequest,
-        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    ) -> dict[str, Any]:
-        executor = _executor(runtime, request.patch_panel_id)
-        decision = executor.execute_junction(
-            card_id=request.card_id,
-            junction_id=request.junction_id,
-            idempotency_key=idempotency_key,
-        )
-        return {
-            "card": decision.card,
-            "selected_pipe": decision.selected_pipe,
-            "selected_bucket": decision.selected_bucket,
-            "accepted": decision.accepted,
-        }
 
     @app.post("/nodes/sink/execute")
     def execute_sink(

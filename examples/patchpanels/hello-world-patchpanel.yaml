@@ -10,8 +10,6 @@ buckets:
   - id: validation_inbox
     description: Artifacts waiting for validator review.
     acceptance_contract: basic_review
-  - id: junction_inbox
-    description: Validated cards waiting for deterministic routing.
   - id: done
     description: Accepted Cards ready for sink egress.
   - id: rejected
@@ -41,22 +39,16 @@ nodes:
       - worker_output
   - id: human_validator
     type: validator
+    validator_kind: routing
     input_pipes:
       - validator_input
     output_pipes:
-      - validator_reviewed
+      - publish
+      - reject
     acceptance_contract: basic_review
-  - id: routing_junction
-    type: junction
-    input_pipes:
-      - junction_input
-    output_pipes:
-      - junction_accept
-      - junction_reject
     config:
-      routes:
-        accepted: junction_accept
-        rejected: junction_reject
+      accept_exits:
+        - publish
   - id: archive_sink
     type: sink
     input_pipes:
@@ -85,20 +77,12 @@ pipe_bindings:
     node: human_validator
     direction: input
     bucket: validation_inbox
-  validator_reviewed:
+  publish:
     node: human_validator
     direction: output
-    bucket: junction_inbox
-  junction_input:
-    node: routing_junction
-    direction: input
-    bucket: junction_inbox
-  junction_accept:
-    node: routing_junction
-    direction: output
     bucket: done
-  junction_reject:
-    node: routing_junction
+  reject:
+    node: human_validator
     direction: output
     bucket: rejected
   sink_input:
@@ -114,8 +98,5 @@ edges:
     to: human_validator
     on: artifact_submitted
   - from: human_validator
-    to: routing_junction
-    on: validated
-  - from: routing_junction
     to: archive_sink
-    on: accepted
+    on: publish

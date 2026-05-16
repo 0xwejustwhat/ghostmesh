@@ -48,7 +48,6 @@ Ghost Mesh is built around a small number of primitives:
 - Workers
 - Validators
 - Learning Nodes
-- Junctions
 - Source Nodes
 - Sink Nodes
 - Subworkflow Nodes
@@ -268,7 +267,7 @@ It answers questions such as:
 - Which Validator reviews Drafts?
 - Where do rejected Cards go?
 - Which Cards are shadow-eligible?
-- Which Junction handles conditional routing?
+- Which routing Validator handles conditional routing?
 - Which workflow version applies to a Card?
 
 The Patch Panel defines the factory floor.
@@ -301,9 +300,10 @@ This limits unauthorized behavior and keeps routing deterministic.
 
 ---
 
-# 2.2 Junction Nodes
+# 2.2 Routing Validators
 
-A **Junction Node** handles deterministic routing decisions.
+A **Routing Validator** handles deterministic routing decisions by selecting one of
+its declared output pipes.
 
 For example:
 
@@ -312,7 +312,7 @@ For example:
 - If legal risk is detected, route to Legal Review.
 - If customer value is above threshold, route to Senior Human Review.
 
-Junctions are lightweight decision nodes.
+Routing validators are lightweight decision nodes.
 
 They should be deterministic whenever possible.
 
@@ -325,7 +325,13 @@ They can be powered by:
 - Scoring functions
 - Policy checks
 
-Junctions prevent ordinary workers from needing global routing logic.
+Ghost Mesh does not require separate Junction Nodes. Junctions are routing
+validators: Validator Nodes with multiple authorized exit pipes. They may route
+Cards algorithmically, subjectively, or through hybrid human/AI judgment, but they
+remain validators because they evaluate the Card's current state against a routing
+contract and select the next permitted path.
+
+Routing validators prevent ordinary workers from needing global routing logic.
 
 ---
 
@@ -449,12 +455,11 @@ For implementation, the fuller node taxonomy is:
 1. Source Nodes
 2. Worker Nodes
 3. Validator Nodes
-4. Junction Nodes
-5. Learning Nodes
-6. Sink Nodes
-7. Subworkflow Nodes
+4. Learning Nodes
+5. Sink Nodes
+6. Subworkflow Nodes
 
-The most common operational nodes are Worker, Validator, and Learning Nodes. Source and Sink Nodes define workflow boundaries. Junction Nodes handle routing. Subworkflow Nodes allow nested Patch Panels.
+The most common operational nodes are Worker, Validator, and Learning Nodes. Source and Sink Nodes define workflow boundaries. Routing Validators handle branching. Subworkflow Nodes allow nested Patch Panels.
 
 This distinction is critical.
 
@@ -607,7 +612,7 @@ Sink Nodes are authorized egress points from a Patch Panel. When a Card reaches 
 
 ## Subworkflow Nodes
 
-Subworkflow Nodes allow one node to contain another Patch Panel. From the outside, the subworkflow behaves like a single node. Internally, it may contain its own Sources, Workers, Validators, Junctions, Learning Nodes, and Sinks.
+Subworkflow Nodes allow one node to contain another Patch Panel. From the outside, the subworkflow behaves like a single node. Internally, it may contain its own Sources, Workers, Validators, Learning Nodes, and Sinks.
 
 ---
 
@@ -1170,4 +1175,3 @@ The first goal is controlled replaceability.
 Once every task can be claimed, completed, validated, audited, shadowed, and improved, enterprise work becomes programmable without becoming fragile.
 
 That is the promise of Ghost Mesh.
-

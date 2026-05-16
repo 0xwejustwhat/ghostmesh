@@ -38,6 +38,7 @@ def test_every_builtin_role_template_is_inspectable_data() -> None:
     assert {role.name for role in roles} == set(RoleName)
     assert all(role.metadata["builtin"] is True for role in roles)
     assert all(role.permissions for role in roles)
+    assert "junction_operator" not in {role.value for role in RoleName}
 
 
 def test_intent_operator_has_ingress_without_design_authority() -> None:
@@ -48,6 +49,14 @@ def test_intent_operator_has_ingress_without_design_authority() -> None:
     assert PermissionName.PATCH_PANEL_CREATE not in permissions
     assert PermissionName.MUTATION_PROPOSE not in permissions
     assert PermissionName.PERMISSION_GRANT not in permissions
+
+
+def test_routing_validator_uses_validation_submit_permission() -> None:
+    permissions = permissions_for(RoleName.ROUTING_VALIDATOR)
+
+    assert PermissionName.CARD_VIEW in permissions
+    assert PermissionName.VALIDATION_SUBMIT in permissions
+    assert PermissionName.EDGE_CREATE not in permissions
 
 
 def test_workflow_architect_can_design_and_propose_but_not_promote() -> None:

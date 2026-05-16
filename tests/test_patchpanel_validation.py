@@ -143,8 +143,12 @@ def test_all_core_node_types_can_be_declared() -> None:
         nodes=[
             {"id": "source", "type": "source"},
             {"id": "worker", "type": "worker"},
-            {"id": "validator", "type": "validator"},
-            {"id": "junction", "type": "junction"},
+            {
+                "id": "validator",
+                "type": "validator",
+                "validator_kind": "routing",
+                "output_pipes": ["route_learning"],
+            },
             {"id": "learning", "type": "learning"},
             {"id": "subworkflow", "type": "subworkflow"},
             {"id": "sink", "type": "sink"},
@@ -152,11 +156,17 @@ def test_all_core_node_types_can_be_declared() -> None:
         edges=[
             {"from": "source", "to": "worker", "on": "card_created"},
             {"from": "worker", "to": "validator", "on": "artifact_submitted"},
-            {"from": "validator", "to": "junction", "on": "accepted"},
-            {"from": "junction", "to": "learning", "on": "routed"},
+            {"from": "validator", "to": "learning", "on": "route_learning"},
             {"from": "learning", "to": "subworkflow", "on": "proposal_created"},
             {"from": "subworkflow", "to": "sink", "on": "completed"},
         ],
+        pipe_bindings={
+            "route_learning": {
+                "node": "validator",
+                "direction": "output",
+                "bucket": "bucket",
+            }
+        },
     )
 
     PatchPanelValidator().validate(patch_panel)

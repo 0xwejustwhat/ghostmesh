@@ -7,8 +7,8 @@
 1. Source creates a Card.
 2. Worker claims from `worker_input`.
 3. Worker submits artifact references through `worker_output`.
-4. Human Validator accepts or rejects.
-5. Junction routes accepted Cards to `done` and rejected Cards to `rejected`.
+4. Routing Validator accepts or rejects and selects an authorized exit pipe.
+5. Accepted Cards route to `done`; rejected Cards route to `rejected`.
 6. Sink records egress evidence.
 
 ## Boundary Adapter Workflow

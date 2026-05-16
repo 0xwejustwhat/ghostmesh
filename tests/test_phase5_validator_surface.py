@@ -54,6 +54,7 @@ def test_human_validator_can_list_inspect_and_decide_reviewable_cards() -> None:
         json={
             "patch_panel_id": "hello_world",
             "accepted": True,
+            "selected_exit": "publish",
             "score": 9,
             "reason": "Approved",
         },
@@ -66,4 +67,6 @@ def test_human_validator_can_list_inspect_and_decide_reviewable_cards() -> None:
     assert inspect_response.json()["card"]["payload"] == {"title": "review"}
     assert decision_response.status_code == 200, decision_response.text
     assert decision_response.json()["payload"]["accepted"] is True
+    assert decision_response.json()["payload"]["output_pipe"] == "publish"
+    assert runtime.get_card(card.id).current_bucket == "done"
     assert "card_validated" in [event.event_type for event in runtime.card_history(card.id)]

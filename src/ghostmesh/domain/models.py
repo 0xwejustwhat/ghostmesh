@@ -14,7 +14,6 @@ class NodeType(StrEnum):
     SOURCE = "source"
     WORKER = "worker"
     VALIDATOR = "validator"
-    JUNCTION = "junction"
     LEARNING = "learning"
     SINK = "sink"
     SUBWORKFLOW = "subworkflow"
@@ -81,6 +80,7 @@ class NodeDefinition(BaseModel):
 
     id: str
     type: NodeType
+    validator_kind: str | None = None
     description: str | None = None
     input_pipes: list[str] = Field(default_factory=list)
     output_pipes: list[str] = Field(default_factory=list)
@@ -184,6 +184,7 @@ class ValidationResult(BaseModel):
     validator_id: str
     accepted: bool
     reason: str | None = None
+    output_pipe: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

@@ -198,6 +198,7 @@ validation_results = Table(
     Column("participant_id", String, ForeignKey("participants.id"), nullable=True),
     Column("accepted", Boolean, nullable=False),
     Column("reason", Text, nullable=True),
+    Column("output_pipe", String, nullable=True),
     Column("payload", JSON, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
 )

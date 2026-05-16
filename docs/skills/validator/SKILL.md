@@ -149,6 +149,6 @@ Reject when required evidence is missing:
 - Do not publish externally.
 - Do not mutate workflows.
 - Do not invent acceptance criteria.
-- Do not route Cards unless explicitly modeled as a routing validator or Junction.
+- Do not route Cards unless explicitly modeled as a routing validator with declared output pipes.
 
 See `api.md`, `mcp.md`, `decision-shapes.md`, and `examples.md`.

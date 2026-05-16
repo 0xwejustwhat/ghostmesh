@@ -15,7 +15,7 @@ Last updated: 2026-05-14
 - Implemented Phase 1 scope includes Pydantic domain models, YAML/JSON Patch Panel loading, NetworkX-backed graph validation, example Patch Panels, and Pytest coverage.
 - Phase 2 scope includes durable workflow versions, buckets, cards, card locations, artifact references, card events, validation results, leases, and idempotency records; a Postgres-backed card runtime; append-only evidence replay; source-node card creation; REST access to cards and history; a minimal pipe-aware `WorkerClient`; and a shadow card harness.
 - Phase 3 scope includes pipe-aware claim and submit flow, Postgres row-lock claim selection, lease renewal, lease release, lease expiry recovery, idempotent claim/submit/renew/release/validate/move operations, and REST endpoints for lease lifecycle actions.
-- Phase 4 scope includes an MVP `NodeExecutor`, executable Source/Worker/Human Validator/Junction/Sink behavior, deterministic junction routing, sink egress evidence, node execution REST endpoints, and a canonical Source to Worker to Human Validator to Junction to Sink workflow.
+- Phase 4 scope includes an MVP `NodeExecutor`, executable Source/Worker/Validator/Sink behavior, routing validators with multiple authorized exits, sink egress evidence, node execution REST endpoints, and a canonical Source to Worker to routing Validator to Sink workflow.
 - Phase 5 scope includes worker lease context inspection, SDK auth/idempotency headers, SDK claim/submit/renew/release/context helpers, human validator review queues, card/evidence inspection, and accept/reject decision endpoints.
 - Phase 6 scope includes shadow card links, sampling and max-parallel controls, production sink isolation for shadow cards, proposed mutation records, mutation validation gates, promotion gates, shadow comparison metrics, and REST endpoints for shadow and mutation flows.
 - Phase 6.5 scope removes artifact content from Postgres, replaces artifact payload submission with `ArtifactReference` lists, adds local Git/filesystem and S3-compatible artifact stores, validates artifact reference structure/count/roles through acceptance contracts, and documents the storage boundary.
@@ -105,7 +105,7 @@ Define the canonical data model and validate declarative Patch Panels before run
 ### Implementation
 
 - Implement Pydantic models for Cards, Buckets, Nodes, Edges, Pipe Bindings, Acceptance Contracts, Workflow Versions, Leases, Artifacts, and Events.
-- Support the core node taxonomy: Source, Worker, Validator, Junction, Learning, Sink, and Subworkflow.
+- Support the core node taxonomy: Source, Worker, Validator, Learning, Sink, and Subworkflow.
 - Implement YAML and JSON Patch Panel loading.
 - Validate Patch Panel schemas before graph analysis.
 - Use NetworkX for reachability, invalid edge detection, dead-end detection, source/sink boundary checks, cycle analysis, and route analysis.
@@ -181,24 +181,24 @@ Implementation status: complete.
 
 ### Goal
 
-Execute the minimum useful Ghost Mesh workflow with Source, Worker, Validator, Junction, and Sink nodes.
+Execute the minimum useful Ghost Mesh workflow with Source, Worker, Validator, and Sink nodes.
 
 ### Implementation
 
-- Implement MVP node behavior for Source, Worker, Validator, Junction, and Sink nodes.
+- Implement MVP node behavior for Source, Worker, Validator, and Sink nodes.
 - Model Learning and Subworkflow nodes in schemas, but defer full execution unless needed by the canonical workflow.
 - Implement objective validators for schema, required fields, thresholds, and policy-style checks.
 - Implement human-review validator flow with accept, reject, score, and reason fields.
-- Implement deterministic junction routing based on validator result, score, metadata, or explicit rules.
+- Implement deterministic routing validator behavior based on validator result, score, metadata, or explicit rules.
 - Implement Sink-node egress contract shape, including optional idempotency key definition and external reference recording.
-- Add a canonical content workflow example using Source to Worker to Human Validator to Junction to Sink.
+- Add a canonical content workflow example using Source to Worker to routing Validator to Sink.
 
 ### Acceptance Criteria
 
-- All seven node types can be declared in Patch Panel configuration.
-- Source, Worker, Validator, Junction, and Sink can execute in the MVP runtime.
+- Source, Worker, Validator, Learning, Sink, and Subworkflow node types can be declared in Patch Panel configuration.
+- Source, Worker, Validator, and Sink can execute in the MVP runtime.
 - Human validator decisions are recorded in the evidence trail.
-- Junctions route deterministically from declared rules.
+- Routing validators route deterministically from declared exits.
 - The canonical content workflow runs end-to-end locally.
 
 ## Phase 5: Worker SDK and Human Validation Surface

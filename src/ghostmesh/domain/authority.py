@@ -32,7 +32,6 @@ class RoleName(StrEnum):
     WORKER = "worker"
     VALIDATOR = "validator"
     ROUTING_VALIDATOR = "routing_validator"
-    JUNCTION_OPERATOR = "junction_operator"
     SOURCE_OPERATOR = "source_operator"
     SINK_OPERATOR = "sink_operator"
     REVIEWER_APPROVER = "reviewer_approver"

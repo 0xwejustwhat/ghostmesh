@@ -55,8 +55,7 @@ Local/dev participant management:
 
 - `POST /nodes/source/execute`
 - `POST /nodes/worker/execute`
-- `POST /nodes/validator/human/execute`
-- `POST /nodes/junction/execute`
+- `POST /nodes/validator/execute`
 - `POST /nodes/sink/execute`
 
 ## Boundary Adapters

@@ -113,11 +113,6 @@ BUILT_IN_ROLE_TEMPLATES: dict[RoleName, RoleTemplate] = {
         description="Reviews routing-sensitive card state and submits validation decisions.",
         permissions=(PermissionName.CARD_VIEW, PermissionName.VALIDATION_SUBMIT),
     ),
-    RoleName.JUNCTION_OPERATOR: RoleTemplate(
-        name=RoleName.JUNCTION_OPERATOR,
-        description="Operates junction review surfaces without graph mutation authority.",
-        permissions=(PermissionName.CARD_VIEW, PermissionName.VALIDATION_SUBMIT),
-    ),
     RoleName.SOURCE_OPERATOR: RoleTemplate(
         name=RoleName.SOURCE_OPERATOR,
         description="Admits work through governed source ingress boundaries.",

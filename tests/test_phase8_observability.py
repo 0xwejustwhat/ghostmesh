@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from ghostmesh.api.main import create_app
-from ghostmesh.nodes import HumanValidationInput, NodeExecutor, WorkerExecutionInput
+from ghostmesh.nodes import NodeExecutor, ValidatorExecutionInput, WorkerExecutionInput
 from ghostmesh.observability import ObservabilityService
 from ghostmesh.patchpanel import load_patch_panel
 from ghostmesh.runtime import InMemoryCardRuntime
@@ -94,16 +94,16 @@ def _runtime_with_workflow() -> tuple[InMemoryCardRuntime, object]:
             artifact_refs=[artifact_ref(card.id)],
         )
     )
-    executor.execute_human_validator(
-        HumanValidationInput(
+    executor.execute_validator(
+        ValidatorExecutionInput(
             card_id=card.id,
             validator_id="human_validator",
             accepted=True,
+            selected_exit="publish",
             score=9,
             reason="ready",
         )
     )
-    executor.execute_junction(card_id=card.id, junction_id="routing_junction")
     executor.execute_sink(
         card_id=card.id,
         sink_id="archive_sink",

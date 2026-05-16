@@ -24,6 +24,7 @@ class ObservabilityService:
                 {
                     "id": node.id,
                     "type": node.type,
+                    "validator_kind": node.validator_kind,
                     "input_pipes": node.input_pipes,
                     "output_pipes": node.output_pipes,
                 }
@@ -195,6 +196,4 @@ def _node_shape(node_id: str, node_type: NodeType) -> str:
         return f'(["{label}"])'
     if node_type == NodeType.SINK:
         return f'(["{label}"])'
-    if node_type == NodeType.JUNCTION:
-        return f'{{"{label}"}}'
     return f'["{label}"]'

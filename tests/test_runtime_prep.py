@@ -41,7 +41,7 @@ def test_runtime_claim_submit_validate_move_flow() -> None:
         card_id=card.id,
         validator_id="human_validator",
         accepted=True,
-        output_pipe="validator_reviewed",
+        output_pipe="publish",
         idempotency_key="validate-1",
     )
 
@@ -49,7 +49,8 @@ def test_runtime_claim_submit_validate_move_flow() -> None:
     assert artifact_refs[0].card_id == card.id
     assert artifact_refs[0].storage_ref.startswith("git:working-tree:")
     assert event.payload["accepted"] is True
-    assert runtime.list_cards()[0].current_bucket == "junction_inbox"
+    assert event.payload["output_pipe"] == "publish"
+    assert runtime.list_cards()[0].current_bucket == "done"
     assert [entry.event_type for entry in runtime.card_history(card.id)] == [
         "card_created",
         "card_claimed",
