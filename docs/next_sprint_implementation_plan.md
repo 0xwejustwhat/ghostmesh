@@ -24,6 +24,16 @@ This sprint plan synthesizes:
 - The provided conversational workflow genesis use-case notes, interpreted as an external-client pattern rather than a runtime primitive.
 - The architecture verification discussion that confirmed pipe-aware workers, artifact reference boundaries, shadow isolation, graph validation, junction routing, and idempotency are already in good shape.
 
+## Companion Architecture Documents
+
+The following architecture documents are normative companions for this sprint plan:
+
+- `docs/participant_authority_architecture.md`: participant-neutral identity, roles, permissions, scopes, authorization decisions, audit events, and built-in role defaults.
+- `docs/patch_panel_registry_architecture.md`: Patch Panel registry metadata, lifecycle states, search APIs, governance APIs, and intent-driven discovery flow.
+- `docs/intent_driven_genesis_architecture.md`: generic `/genesis` ingress, Intent Operator and Workflow Architect responsibilities, generative designer seats, proposal flow, and participant-neutral workflow genesis.
+
+Implementation work should update these architecture documents when a design decision changes during the sprint.
+
 ## Non-Negotiable Principles
 
 - Ghost Mesh is participant-neutral. Humans, agents, scripts, services, vendors, organizations, integrations, and subworkflows are participants.
@@ -70,6 +80,8 @@ The current codebase is structurally ready for this work, but it has deliberate 
 Phase 10: Participant Authority, Workflow Registry, and Intent-Driven Genesis.
 
 ## Workstream 1: Participant Authority Domain Model
+
+Architecture reference: `docs/participant_authority_architecture.md`.
 
 ### Implementation Tasks
 
@@ -187,6 +199,8 @@ Phase 10: Participant Authority, Workflow Registry, and Intent-Driven Genesis.
 
 ## Workstream 4: Role Catalog and Governance Defaults
 
+Architecture reference: `docs/participant_authority_architecture.md`.
+
 ### Implementation Tasks
 
 - Define built-in role templates:
@@ -217,6 +231,8 @@ Phase 10: Participant Authority, Workflow Registry, and Intent-Driven Genesis.
 - Observer is read-only.
 
 ## Workstream 5: Patch Panel Registry
+
+Architecture reference: `docs/patch_panel_registry_architecture.md`.
 
 ### Implementation Tasks
 
@@ -295,6 +311,8 @@ Phase 10: Participant Authority, Workflow Registry, and Intent-Driven Genesis.
 - Proposal history is append-only.
 
 ## Workstream 7: Intent-Driven Genesis MVP
+
+Architecture reference: `docs/intent_driven_genesis_architecture.md`.
 
 ### Implementation Tasks
 

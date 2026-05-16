@@ -44,10 +44,10 @@ def upgrade() -> None:
             content_hash=LEGACY_HASH,
             content_type="application/json",
             size_bytes=0,
-            artifact_metadata={
-                "migration": "legacy_payload_removed",
-                "requires_manual_rehydration": True,
-            },
+            artifact_metadata=sa.text(
+                '\'{"migration":"legacy_payload_removed", '
+                '"requires_manual_rehydration":true}\'::json'
+            ),
         )
     )
 

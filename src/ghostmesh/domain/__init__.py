@@ -1,5 +1,21 @@
 """Domain models for Ghost Mesh."""
 
+from ghostmesh.domain.authority import (
+    AuditAction,
+    AuthorizationAuditEvent,
+    AuthorizationDecision,
+    Participant,
+    ParticipantStatus,
+    ParticipantType,
+    PermissionGrant,
+    PermissionName,
+    Role,
+    RoleAssignment,
+    RoleName,
+    Scope,
+    ScopeType,
+    legacy_actor_to_participant_id,
+)
 from ghostmesh.domain.models import (
     AcceptanceContract,
     ArtifactReference,
@@ -23,6 +39,9 @@ from ghostmesh.domain.models import (
 __all__ = [
     "AcceptanceContract",
     "ArtifactReference",
+    "AuditAction",
+    "AuthorizationAuditEvent",
+    "AuthorizationDecision",
     "BucketDefinition",
     "Card",
     "CardEvent",
@@ -32,10 +51,21 @@ __all__ = [
     "MutationStatus",
     "NodeDefinition",
     "NodeType",
+    "Participant",
+    "ParticipantStatus",
+    "ParticipantType",
     "PatchPanel",
+    "PermissionGrant",
+    "PermissionName",
     "PipeBinding",
     "ProposedMutation",
+    "Role",
+    "RoleAssignment",
+    "RoleName",
+    "Scope",
+    "ScopeType",
     "ShadowCardLink",
     "ValidationResult",
     "WorkflowVersion",
+    "legacy_actor_to_participant_id",
 ]
