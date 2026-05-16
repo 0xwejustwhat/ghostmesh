@@ -1,194 +1,83 @@
 # Ghost Mesh
 
-Ghost Mesh is a graph-native accountability substrate for human and AI work.
+Ghost Mesh is a headless, decentralized choreography layer for outcome-oriented agentic workflows and automated production pipelines. It is a substrate designed to transform non-deterministic intelligence into predictable, human-in-the-loop verified business infrastructure.
 
-## Current Implementation Status
+At the capability layer, Ghost Mesh is participant-neutral. Humans, AI models, terminal scripts, services, integrations, and automated systems are all governed by authenticated `Participant` records, granular `PermissionName` strings, and cryptographic `Scope` constraints. Interface type never grants authority by itself.
 
-Phase 0 through Phase 10 are implemented.
+## The Core Problem & Philosophy
 
-Phase 0 foundation:
+Traditional workflow platforms rely on a central orchestrator that holds master graph state and pushes updates to passive agents. This model breaks down at scale because it creates execution bottlenecks, tightly coupled integration surfaces, a lack of structured auditability across human-AI boundaries, and weak protection for production state from raw LLM hallucinations.
 
-- Poetry-managed Python package
-- FastAPI app with health endpoint
-- Docker Compose configuration for API and Postgres
-- Alembic migration scaffolding
-- Structured logging setup
-- Ruff linting and formatting configuration
-- Makefile developer commands
-- Baseline GitHub Actions CI
+Ghost Mesh takes the opposite posture:
 
-Phase 1 graph model and validation:
+```text
+Do not orchestrate agents. Choreograph work.
+```
 
-- Pydantic domain models for Patch Panels, Cards, Buckets, Nodes, Edges, Pipe Bindings, Acceptance Contracts, Workflow Versions, Leases, Artifact References, and Events
-- YAML/JSON Patch Panel loading
-- NetworkX-backed graph validation
-- Example Patch Panels
-- Pytest coverage for core validation behavior
+The platform isolates execution down to localized, stateless, pipe-aware stations. Data flows autonomously through immutable tracking containers called Cards, guided entirely by static network patch panels. A worker leases from an input pipe, emits structured artifacts, and releases the Card. It does not need global graph authority, hidden routing knowledge, or privileged access to production side effects.
 
-Phase 2 runtime state:
+## System Primitives & Architectural Taxonomy
 
-- In-memory `CardRuntime` for card claim, submit, validate, move, and history
-- Postgres-backed card runtime for durable card creation, movement, and evidence replay
-- Runtime tables and Alembic migrations for workflow versions, buckets, cards, card locations, leases, artifact references, events, validation results, and idempotency records
-- Basic lease and idempotency primitives
-- REST endpoints for `/patchpanels`, `/cards`, claim, submit, validate, move, and history
-- Minimal pipe-aware `WorkerClient`
-- Shadow harness tests for linked, isolated shadow cards
+A Patch Panel is the immutable topology that defines how Cards move. Six primary node categories handle all data movement inside that topology:
 
-Phase 3 card movement:
+- **Source Nodes**: Ingress gateways that admit work packages into the mesh by translating external events, webhooks, API triggers, and conversational intents into standard Cards.
+- **Worker Nodes**: Narrow, decentralized labor stations that lease a Card from an input pipe, perform a specific task, submit structured file artifacts, and release their lease.
+- **Validator Nodes**: Verification checkpoints that evaluate a Card's current state against an explicit acceptance contract. This includes standard binary checkers for accept/reject outcomes and Routing Validators (Junctions) that natively choose one of several authorized exit pipes to direct the Card downstream. A routing junction is not a standalone node class or type; it is a multi-cardinality subtype of a standard Validator Node whose declared `output_pipes` and acceptance contract govern the only permitted exits.
+- **Learning Nodes**: Non-blocking optimization layers that observe historical performance logs to propose process adaptations.
+- **Sink Nodes**: Egress gates authorized to map completed Card data out to external production networks.
+- **Subworkflow Nodes**: Nested sub-graphs indexed in the registry by their input/output boundary signatures.
 
-- Pipe-aware claim and submit flow backed by the runtime
-- Postgres row-lock claim selection
-- Lease renewal, release, and expiry recovery
-- Idempotent claim, submit, renew, release, validate, and move operations
-- REST endpoints for lease lifecycle actions
-- Tests covering expired lease recovery, idempotent submit, and lease API behavior
+Authority remains separate from node shape. Any participant operating any node must pass the same permission and scope checks before claiming Cards, submitting artifacts, validating outcomes, promoting mutations, or executing sinks.
 
-Phase 4 node execution:
+## Intent-Driven Genesis
 
-- MVP `NodeExecutor` for Source, Worker, Validator, and Sink nodes
-- Routing validators with multiple authorized exit pipes
-- Sink execution evidence with optional external references
-- Canonical Source to Worker to routing Validator to Sink workflow
-- REST endpoints under `/nodes/.../execute`
-- Tests covering accepted and rejected validator routes plus API node execution
+New automated tracks are spun up on demand through explicit intent creation rather than chat-session control transfer.
 
-Phase 5 worker and validator surfaces:
+External conversational clients may let users express high-level requirements in natural language. These clients can operate through MCP, REST, CLI wrappers, webhooks, or other integration surfaces, but they remain decoupled external controllers. They manage conversational sandboxes only until a bounded intent is explicitly submitted.
 
-- Worker SDK helpers for claim, submit, renew, release, and assigned-card context
-- SDK idempotency and optional bearer auth headers
-- Worker context endpoint at `/workers/leases/{lease_id}/context`
-- Human validator review queues at `/validators/{validator_id}/cards`
-- Human validator card inspection at `/validators/cards/{card_id}`
-- Human validator decision submission at `/validators/{validator_id}/cards/{card_id}/decision`
-- Tests covering worker context, validator review/decision flow, and SDK headers
+Once an intent is pushed through `/genesis/intents`, control is surrendered to the immutable topology of the target Patch Panel graph. The runtime evaluates the request against the Patch Panel Registry using dual identifiers: `patch_panel_id` and `version`. If a compatible published graph exists, Ghost Mesh creates a Card in the authorized ingress scope and the Patch Panel governs all subsequent movement.
 
-Phase 6 shadow and mutation safety:
+If a gap is detected, an agent or other participant filling the Workflow Architect role may draft a proposed topology modification layout and submit it as a sandboxed `PatchPanelProposal`. That proposal remains quarantined until independent validation and governance promote it to active production status. The proposing participant cannot publish its own topology, bypass validators, or execute production sinks unless separately granted those permissions in the relevant scope.
 
-- Shadow card links with production/shadow card references
-- Sampling and maximum parallel shadow controls
-- Shadow comparison metrics
-- Production sink protection for shadow cards
-- Proposed mutation records and mutation validation gates
-- Promotion gate that only promotes validated mutations
-- REST endpoints for `/shadows` and `/mutations`
-- Tests proving shadow isolation, sampling/parallel limits, and mutation validation before promotion
+## Technical Quickstart
 
-Phase 6.5 artifact storage boundary:
+Prerequisites:
 
-- `ArtifactReference` replaces artifact content storage in the runtime contract
-- `/cards/submit`, node worker execution, and the Worker SDK accept one or more artifact references
-- Postgres stores only artifact reference metadata: `storage_ref`, `content_hash`, `content_type`, `size_bytes`, and metadata
-- Event evidence records artifact IDs, hashes, and storage references, never artifact bodies
-- Local filesystem/Git working-tree artifact store for development and version-controlled outputs
-- S3/MinIO-compatible artifact store for production binaries and large media
-- Acceptance contract rules can require artifact reference structure, count, and roles
-- Migration `20260514_0004` removes the legacy artifact payload column and marks legacy rows for manual rehydration
+- Python 3.11+
+- Docker
+- Poetry
 
-Phase 7 boundary adapters:
-
-- Controlled Source and Sink boundary contracts
-- Webhook/API boundary endpoints at `/boundaries/source` and `/boundaries/sink`
-- Source deduplication keys and Sink egress idempotency keys
-- Payload and metadata mapping for external systems
-- External reference recording for side effects
-- GitHub issue intake and notification webhook example
-- MCP documented as an edge integration mechanism, not the internal runtime
-
-Phase 8 observability:
-
-- Read-only operator endpoints under `/ops/...`
-- Topology, Mermaid graph output, Cards by bucket, bucket load, active leases, worker activity, validator decisions, workflow versions, failed movements, metrics, and dashboard aggregate
-- Structured lifecycle event logging
-
-Phase 9 open-source readiness:
-
-- Architecture, API, SDK, deployment, workflow, and AI adoption documentation
-- Agent-facing skills in `docs/skills`
-- Contributing guide, code of conduct, roadmap, and MIT license
-- Docker image instructions and Helm chart stub
-- CI validates Poetry install, Ruff, Alembic migrations, Docker Compose config, and tests
-
-Phase 10 participant authority, workflow registry, and intent-driven genesis:
-
-- Participant-neutral authority model for humans, agents, scripts, services, vendors, organizations, integrations, and subworkflows
-- Scoped roles, direct permission grants, role-derived grants, and authorization audit events
-- Participant persistence tables and nullable participant bridges beside existing `worker_id`, `validator_id`, and `actor_id` fields
-- Built-in role catalog for operators, workers, validators, reviewers, observers, admins, intent operators, and workflow architects
-- Patch Panel registry metadata, exact discovery APIs, archive/supersede lifecycle, and draft metadata updates
-- Governed Patch Panel proposal lifecycle with validation, approval, rejection, and append-only review history
-- Structured `/genesis` intent APIs for registry discovery, card launch, and proposal submission without agent-specific runtime primitives
-- Worker SDK support for optional `X-Ghostmesh-Participant` while preserving worker lease identity
-
-Docker Compose startup has been verified with the API and Postgres containers running locally.
-
-## Documentation
-
-- [Architecture](docs/architecture.md)
-- [REST API](docs/api.md)
-- [Worker SDK](docs/worker-sdk.md)
-- [Deployment](docs/deployment.md)
-- [Example workflows](docs/workflows.md)
-- [Human to AI operating path](docs/ai-adoption-path.md)
-- [Participant authority architecture](docs/participant_authority_architecture.md)
-- [Patch Panel registry architecture](docs/patch_panel_registry_architecture.md)
-- [Intent-driven genesis MVP](docs/intent_driven_genesis_mvp.md)
-- [Agent skills](docs/skills): executable playbooks for workers, validators, boundary adapters, and workflow architects.
-
-## Developer Setup
+Install dependencies:
 
 ```bash
 poetry install
+```
+
+Boot the local environment and database:
+
+```bash
+docker compose up -d
+poetry run alembic upgrade head
+```
+
+Run the suite:
+
+```bash
 poetry run ruff check .
 poetry run pytest
 ```
 
-Run the local API without Docker:
+Run the API locally:
 
 ```bash
 poetry run uvicorn ghostmesh.api.main:app --reload
 ```
 
-Run the local stack with Docker:
+## Comprehensive Documentation Index
 
-```bash
-docker compose up --build -d
-curl http://localhost:8000/health
-```
-
-Human validator API sketch:
-
-```bash
-curl "http://localhost:8000/validators/human_validator/cards?patch_panel_id=hello_world"
-curl "http://localhost:8000/validators/cards/<card_id>"
-curl -X POST "http://localhost:8000/validators/human_validator/cards/<card_id>/decision" \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: validator-decision-1" \
-  -d '{"patch_panel_id":"hello_world","accepted":true,"score":9,"reason":"Approved"}'
-```
-
-Worker artifact submission sketch:
-
-```python
-from ghostmesh.artifacts import LocalGitArtifactStore
-from ghostmesh.sdk import WorkerClient
-
-client = WorkerClient("http://localhost:8000", worker_id="worker-1")
-lease = client.claim(input_pipe="worker_input")
-context = client.context(lease_id=lease["id"])
-store = LocalGitArtifactStore("artifacts", repo_root=".")
-
-artifact = client.upload_bytes(
-    store,
-    card_id=context["card"]["id"],
-    data=b"draft output",
-    filename="draft.txt",
-    content_type="text/plain",
-    metadata={"role": "draft"},
-)
-client.submit(
-    lease_id=lease["id"],
-    output_pipe="worker_output",
-    artifact_refs=[artifact],
-)
-```
+- [Core Whitepaper](docs/ghost_mesh_updated_whitepaper%20v1.md) - The foundational technical thesis on labor liquidity substrates.
+- [System Architecture](docs/architecture.md) - State isolation layers, postgres index layouts, and artifact boundaries.
+- [Identity & RBAC Engine](docs/participant_authority_architecture.md) - Comprehensive permission grids, scopes, and functional role catalogs.
+- [Patch Panel Registry](docs/patch_panel_registry_architecture.md) - Contract tracking, version control, and multi-version pipeline index maps.
+- [Intent-Driven Genesis](docs/intent_driven_genesis_architecture.md) - Natural language translation mechanics and sandbox compilation states.
+- [Skill Catalogs](docs/skills/README.md) - MCP configuration models and prompt engineering rules for independent worker roles.

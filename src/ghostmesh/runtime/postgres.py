@@ -466,7 +466,11 @@ class PostgresCardRuntime:
             }
             if output_pipe:
                 patch_panel = self._get_patch_panel_for_card(session, card)
-                destination_bucket = patch_panel.pipe_bindings[output_pipe].bucket
+                destination_bucket, _node_id = resolve_pipe_bucket(
+                    patch_panel,
+                    output_pipe,
+                    "output",
+                )
                 self._move_card_row(
                     session,
                     card=card,

@@ -387,11 +387,16 @@ Examples:
 Determine which edge fires next by selecting one of the validator's declared output
 pipes.
 
-Ghost Mesh does not require separate Junction Nodes. Junctions are routing validators:
-Validator Nodes with multiple authorized exit pipes. They may route Cards
+Ghost Mesh does not require a standalone junction node class. Junctions are routing
+validators: Validator Nodes with multiple authorized exit pipes. They may route Cards
 algorithmically, subjectively, or through hybrid human/AI judgment, but they remain
 validators because they evaluate the Card's current state against a routing contract
 and select the next permitted path.
+
+Routing validators must either submit an explicit accepted/rejected result or define
+`config.accept_exits`. The Patch Panel still authorizes exits through
+`output_pipes` and pipe bindings; `accept_exits` only controls how selected exits are
+recorded on the validation ledger.
 
 Examples:
 

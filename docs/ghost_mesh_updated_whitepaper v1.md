@@ -325,7 +325,7 @@ They can be powered by:
 - Scoring functions
 - Policy checks
 
-Ghost Mesh does not require separate Junction Nodes. Junctions are routing
+Ghost Mesh does not require a standalone junction node class. Junctions are routing
 validators: Validator Nodes with multiple authorized exit pipes. They may route
 Cards algorithmically, subjectively, or through hybrid human/AI judgment, but they
 remain validators because they evaluate the Card's current state against a routing

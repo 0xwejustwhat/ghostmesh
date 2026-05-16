@@ -22,11 +22,16 @@ Ghost Mesh is a graph-native accountability runtime for human and AI work. It is
 - **Sink** performs controlled egress and records external references.
 - **Subworkflow** represents nested workflow structure for later expansion.
 
-Ghost Mesh does not require separate Junction Nodes. Junctions are routing validators:
-Validator Nodes with multiple authorized exit pipes. They may route Cards
+Ghost Mesh does not require a standalone junction node class. Junctions are routing
+validators: Validator Nodes with multiple authorized exit pipes. They may route Cards
 algorithmically, subjectively, or through hybrid human/AI judgment, but they remain
 validators because they evaluate the Card's current state against a routing contract
 and select the next permitted path.
+
+For routing validators, `output_pipes` and Patch Panel bindings define which exits
+are authorized. `config.accept_exits` defines ledger semantics when the validator
+does not submit an explicit `accepted` value: exits in that list record
+`accepted=true`, and all other declared exits record `accepted=false`.
 
 ## Safety Rules
 

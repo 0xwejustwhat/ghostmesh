@@ -194,4 +194,7 @@ class NodeExecutor:
         accept_exits = node.config.get("accept_exits")
         if isinstance(accept_exits, list):
             return request.selected_exit in accept_exits
-        return True
+        raise InvalidOperationError(
+            f"routing validator '{node.id}' requires config.accept_exits when accepted "
+            "is not provided"
+        )

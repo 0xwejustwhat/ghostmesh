@@ -138,6 +138,59 @@ def test_source_with_incoming_edge_and_sink_with_outgoing_edge_are_rejected() ->
     assert "sink node 'sink' must not have outgoing edges" in str(exc_info.value)
 
 
+def test_routing_validator_requires_accept_exits_list() -> None:
+    patch_panel = _minimal_patch_panel(
+        nodes=[
+            {"id": "source", "type": "source"},
+            {
+                "id": "validator",
+                "type": "validator",
+                "validator_kind": "routing",
+                "output_pipes": ["publish", "reject"],
+            },
+            {"id": "sink", "type": "sink"},
+        ],
+        edges=[
+            {"from": "source", "to": "validator", "on": "card_created"},
+            {"from": "validator", "to": "sink", "on": "publish"},
+        ],
+        pipe_bindings={
+            "publish": {"node": "validator", "direction": "output", "bucket": "bucket"},
+            "reject": {"node": "validator", "direction": "output", "bucket": "bucket"},
+        },
+    )
+
+    with pytest.raises(PatchPanelValidationError, match="config.accept_exits"):
+        PatchPanelValidator().validate(patch_panel)
+
+
+def test_routing_validator_accept_exits_must_be_declared_output_pipes() -> None:
+    patch_panel = _minimal_patch_panel(
+        nodes=[
+            {"id": "source", "type": "source"},
+            {
+                "id": "validator",
+                "type": "validator",
+                "validator_kind": "routing",
+                "output_pipes": ["publish", "reject"],
+                "config": {"accept_exits": ["missing"]},
+            },
+            {"id": "sink", "type": "sink"},
+        ],
+        edges=[
+            {"from": "source", "to": "validator", "on": "card_created"},
+            {"from": "validator", "to": "sink", "on": "publish"},
+        ],
+        pipe_bindings={
+            "publish": {"node": "validator", "direction": "output", "bucket": "bucket"},
+            "reject": {"node": "validator", "direction": "output", "bucket": "bucket"},
+        },
+    )
+
+    with pytest.raises(PatchPanelValidationError, match="not declared in output_pipes"):
+        PatchPanelValidator().validate(patch_panel)
+
+
 def test_all_core_node_types_can_be_declared() -> None:
     patch_panel = _minimal_patch_panel(
         nodes=[
@@ -148,6 +201,7 @@ def test_all_core_node_types_can_be_declared() -> None:
                 "type": "validator",
                 "validator_kind": "routing",
                 "output_pipes": ["route_learning"],
+                "config": {"accept_exits": ["route_learning"]},
             },
             {"id": "learning", "type": "learning"},
             {"id": "subworkflow", "type": "subworkflow"},

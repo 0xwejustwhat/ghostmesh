@@ -11,6 +11,10 @@
 5. Accepted Cards route to `done`; rejected Cards route to `rejected`.
 6. Sink records egress evidence.
 
+Routing validators declare their allowed exits as `output_pipes`. When a validator
+request omits an explicit `accepted` value, `config.accept_exits` determines which
+selected exits record `accepted=true` on the ledger.
+
 ## Boundary Adapter Workflow
 
 `examples/patchpanels/webhook-boundary-patchpanel.yaml` demonstrates:

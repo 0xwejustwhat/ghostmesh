@@ -232,7 +232,9 @@ def test_phase10_docs_are_linked_from_readme() -> None:
     root = EXAMPLES.parents[1]
     readme = (root / "README.md").read_text()
 
-    assert "Phase 0 through Phase 10 are implemented." in readme
+    assert "Do not orchestrate agents. Choreograph work." in readme
+    assert "`Participant` records" in readme
+    assert "Routing Validators (Junctions)" in readme
     assert "docs/participant_authority_architecture.md" in readme
     assert "docs/patch_panel_registry_architecture.md" in readme
-    assert "docs/intent_driven_genesis_mvp.md" in readme
+    assert "docs/intent_driven_genesis_architecture.md" in readme

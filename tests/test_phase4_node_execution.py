@@ -88,6 +88,80 @@ def test_routing_validator_routes_rejected_cards_to_rejected_bucket() -> None:
     assert runtime.get_card(card.id).current_bucket == "rejected"
 
 
+def test_routing_validator_derives_acceptance_from_accept_exits() -> None:
+    patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
+    runtime = InMemoryCardRuntime()
+    runtime.register_patch_panel(patch_panel)
+    executor = NodeExecutor(patch_panel=patch_panel, runtime=runtime)
+    card = executor.execute_source(source_id="intake_source", payload={"title": "Derived"})
+
+    accepted_validation = executor.execute_validator(
+        ValidatorExecutionInput(
+            card_id=card.id,
+            validator_id="human_validator",
+            selected_exit="publish",
+        )
+    )
+
+    assert accepted_validation.payload["accepted"] is True
+    assert runtime.get_card(card.id).current_bucket == "done"
+
+    rejected_card = executor.execute_source(
+        source_id="intake_source",
+        payload={"title": "Derived reject"},
+    )
+    rejected_validation = executor.execute_validator(
+        ValidatorExecutionInput(
+            card_id=rejected_card.id,
+            validator_id="human_validator",
+            selected_exit="reject",
+        )
+    )
+
+    assert rejected_validation.payload["accepted"] is False
+    assert runtime.get_card(rejected_card.id).current_bucket == "rejected"
+
+
+def test_routing_validator_requires_accept_exits_when_acceptance_is_omitted() -> None:
+    registered_patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
+    patch_panel = registered_patch_panel.model_copy(deep=True)
+    validator = next(node for node in patch_panel.nodes if node.id == "human_validator")
+    validator.config.pop("accept_exits")
+    runtime = InMemoryCardRuntime()
+    runtime.register_patch_panel(registered_patch_panel)
+    executor = NodeExecutor(patch_panel=patch_panel, runtime=runtime)
+    card = executor.execute_source(source_id="intake_source", payload={"title": "Missing"})
+
+    with pytest.raises(InvalidOperationError, match="requires config.accept_exits"):
+        executor.execute_validator(
+            ValidatorExecutionInput(
+                card_id=card.id,
+                validator_id="human_validator",
+                selected_exit="publish",
+            )
+        )
+
+
+def test_explicit_acceptance_still_overrides_accept_exits() -> None:
+    patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
+    runtime = InMemoryCardRuntime()
+    runtime.register_patch_panel(patch_panel)
+    executor = NodeExecutor(patch_panel=patch_panel, runtime=runtime)
+    card = executor.execute_source(source_id="intake_source", payload={"title": "Override"})
+
+    validation = executor.execute_validator(
+        ValidatorExecutionInput(
+            card_id=card.id,
+            validator_id="human_validator",
+            accepted=True,
+            selected_exit="reject",
+        )
+    )
+
+    assert validation.payload["accepted"] is True
+    assert runtime.get_card(card.id).current_bucket == "rejected"
+
+
 def test_routing_validator_rejects_undeclared_selected_exit() -> None:
     patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
     runtime = InMemoryCardRuntime()
