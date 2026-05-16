@@ -59,7 +59,8 @@ Examples:
 - Learning / Optimizer
 - Observer
 - Admin
-- Hermes Chief of Staff
+- Intent Operator
+- Workflow Architect
 
 ### Permission
 
@@ -263,7 +264,16 @@ Typical grants:
 
 Read-only unless separately granted more authority.
 
-### Hermes Chief of Staff
+### Intent Operator
+
+Typical grants:
+
+- `card:create` within designated intent ingress scopes
+- `patch_panel:discover` when intake is allowed to reuse existing workflows
+
+Intent Operators handle raw or structured intake from conversational sandboxes, automation systems, APIs, or manual callers. They do not receive graph design authority by default.
+
+### Workflow Architect
 
 Typical grants:
 
@@ -278,7 +288,7 @@ Typical grants:
 - `mutation:propose`
 - `shadow:create`
 
-Hermes should not receive `mutation:promote` or `patch_panel:publish_version` by default.
+Workflow Architects should not receive `mutation:promote`, `patch_panel:publish_version`, `sink:execute`, or `permission:grant` by default. Their job is to propose workflow topology, not to promote it into production unreviewed.
 
 ## Enforcement Boundaries
 

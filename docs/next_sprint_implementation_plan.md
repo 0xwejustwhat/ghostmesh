@@ -4,7 +4,7 @@
 
 Draft sprint plan for the first post-Phase 9 implementation cycle.
 
-This plan assumes the current runtime has completed the open-source MVP through Phase 9: Patch Panel loading and validation, card runtime, worker leases, artifact references, node execution, shadow lanes, boundary adapters, observability, and public documentation. The next sprint should move Ghost Mesh from a technically complete runtime into a governed operating substrate where participants, permissions, workflow discovery, and Hermes-style conversational workflow genesis can be implemented without breaking the core choreography model.
+This plan assumes the current runtime has completed the open-source MVP through Phase 9: Patch Panel loading and validation, card runtime, worker leases, artifact references, node execution, shadow lanes, boundary adapters, observability, and public documentation. The next sprint should move Ghost Mesh from a technically complete runtime into a governed operating substrate where participants, permissions, workflow discovery, and intent-driven workflow genesis can be implemented without breaking the core choreography model.
 
 ## Sprint Theme
 
@@ -13,7 +13,7 @@ Implement the governance layer that lets Ghost Mesh answer four questions consis
 - Who or what is taking this action?
 - Which role and permission authorize it?
 - Which workflow, bucket, node, card, artifact, or version is the action scoped to?
-- Is Hermes proposing, launching, or mutating work through the same governed mechanisms as every other participant?
+- Is the participant proposing, launching, or mutating work through the same governed mechanisms as every other participant?
 
 ## Source Inputs
 
@@ -21,7 +21,7 @@ This sprint plan synthesizes:
 
 - Current Phase 0-9 implementation status in this repository.
 - `ghost_mesh_participant_roles_and_authority_addendum_v_1.md`.
-- `ghost_mesh_hermes_chief_of_staff_use_case.md`.
+- The provided conversational workflow genesis use-case notes, interpreted as an external-client pattern rather than a runtime primitive.
 - The architecture verification discussion that confirmed pipe-aware workers, artifact reference boundaries, shadow isolation, graph validation, junction routing, and idempotency are already in good shape.
 
 ## Non-Negotiable Principles
@@ -32,7 +32,7 @@ This sprint plan synthesizes:
 - No participant receives implicit global authority.
 - Workers remain pipe-aware and Patch Panels remain graph-aware.
 - Routes remain dumb edges. Junctions and routing validators decide movement.
-- Hermes is not a meta-orchestrator outside the mesh. Hermes is a participant with scoped elevated permissions.
+- No named assistant, agent framework, or conversational product is a runtime primitive. External clients are ordinary participants using uniform REST/MCP boundaries and scoped permissions.
 - Patch Panels must remain explicit, versioned, portable, inspectable, and governable.
 - Evidence remains append-only. Deletion is modeled primarily as state transition or redaction.
 
@@ -45,15 +45,15 @@ The current codebase is structurally ready for this work, but it has deliberate 
 - There is no durable role, permission, scope, policy, or participant assignment table.
 - Patch Panel registration persists definitions, but does not expose registry metadata for discovery by intent, capability, risk, tool need, input/output type, owner, or tags.
 - Proposed mutations exist, but their payloads are not yet constrained by a Patch Panel governance flow.
-- Hermes can be modeled cleanly with existing nodes and mutation primitives, but the project lacks the participant, registry, and proposal APIs needed to make it real.
+- Intent-driven genesis can be modeled cleanly with existing nodes and mutation primitives, but the project lacks the participant, registry, and proposal APIs needed to make it real without coupling to any one external client.
 
 ## Sprint Goals
 
 1. Add a participant-neutral authority model with roles, permissions, scopes, and audit events.
 2. Introduce authorization enforcement at key runtime and governance boundaries without overhauling all internal service methods at once.
 3. Add Patch Panel registry metadata and discovery APIs.
-4. Define the Hermes Chief-of-Staff implementation path as a governed participant workflow.
-5. Add a governed Patch Panel proposal lifecycle that can accept Hermes-generated workflow proposals, validate them, review them, and promote them.
+4. Define the intent-driven workflow genesis path as a governed participant workflow.
+5. Add a governed Patch Panel proposal lifecycle that can accept externally generated workflow proposals, validate them, review them, and promote them.
 6. Preserve MVP ergonomics by providing development defaults and migration paths for existing string actor IDs.
 
 ## Out Of Scope
@@ -61,13 +61,13 @@ The current codebase is structurally ready for this work, but it has deliberate 
 - Building a full user interface.
 - Implementing production SSO, OAuth, SCIM, or enterprise identity federation.
 - Building semantic search with embeddings as the first registry implementation.
-- Giving Hermes unrestricted autonomous production publishing.
+- Giving any intent-ingress or workflow-architect participant unrestricted autonomous production publishing.
 - Replacing existing worker SDK flows.
 - Rewriting runtime internals around a large policy engine before a small explicit permission service exists.
 
 ## Proposed Phase Name
 
-Phase 10: Participant Authority, Workflow Registry, and Hermes Genesis.
+Phase 10: Participant Authority, Workflow Registry, and Intent-Driven Genesis.
 
 ## Workstream 1: Participant Authority Domain Model
 
@@ -202,7 +202,8 @@ Phase 10: Participant Authority, Workflow Registry, and Hermes Genesis.
   - Learning / Optimizer
   - Observer
   - Admin
-  - Hermes Chief of Staff
+  - Intent Operator
+  - Workflow Architect
 - Keep templates inspectable and testable as data.
 - Add seed helper for local development roles and sample participants.
 - Ensure Admin is powerful but not magical. Admin must receive explicit grants.
@@ -210,7 +211,8 @@ Phase 10: Participant Authority, Workflow Registry, and Hermes Genesis.
 ### Acceptance Criteria
 
 - Each built-in role maps to a concrete permission list.
-- Hermes role has broad design and proposal permissions, but does not include direct production promotion by default.
+- Intent Operator can admit structured intent into designated ingress scopes without receiving graph design authority by default.
+- Workflow Architect has broad design and proposal permissions, but does not include direct production promotion by default.
 - Shadow Participant cannot execute production sink permissions by default.
 - Observer is read-only.
 
@@ -249,7 +251,7 @@ Phase 10: Participant Authority, Workflow Registry, and Hermes Genesis.
 
 ### Acceptance Criteria
 
-- Hermes can discover candidate Patch Panels through a documented registry query API.
+- Authorized participants can discover candidate Patch Panels through a documented registry query API.
 - Registry entries remain separate from runtime card state.
 - Patch Panel definitions remain explicit graph documents.
 - Archived and superseded workflows remain inspectable but are excluded from default launch search.
@@ -287,39 +289,41 @@ Phase 10: Participant Authority, Workflow Registry, and Hermes Genesis.
 
 ### Acceptance Criteria
 
-- Invalid Hermes-generated Patch Panels fail before review.
+- Invalid externally generated Patch Panels fail before review.
 - Valid generated Patch Panels can enter review without becoming production workflows.
 - Approval is a separate permissioned action.
 - Proposal history is append-only.
 
-## Workstream 7: Hermes Chief-of-Staff MVP
+## Workstream 7: Intent-Driven Genesis MVP
 
 ### Implementation Tasks
 
-- Add a Hermes participant fixture and role template.
-- Add a Hermes service boundary that performs deterministic workflow operations:
+- Add neutral Intent Operator and Workflow Architect participant fixtures and role templates.
+- Add a generic genesis service boundary that performs deterministic workflow operations:
   - interpret an already-structured intent request
   - query registry candidates
   - create Cards for an existing Patch Panel when allowed
   - create Patch Panel proposals when no candidate matches
   - request governance approval
-- Avoid free-form LLM integration in the first sprint. Accept structured intent input so the mesh mechanics can be proven independently.
+- Add `POST /genesis/intents` for standardized structured intent intake with desired inputs, outputs, constraints, and a mandatory deduplication key.
+- Avoid free-form LLM integration in the first sprint. Accept structured intent input so the mesh mechanics can be proven independently of any agent framework.
 - Add example Patch Panel for workflow genesis:
   - Source: structured user intent
-  - Worker: Hermes workflow designer
+  - Worker: generative designer seat
   - Validator: Patch Panel schema and topology validation
   - Reviewer: governance approval
   - Sink: registry publication
-- Add docs/examples showing how an external conversational agent could call the Hermes APIs later.
+- Add docs/examples showing how any external conversational agent, automation tool, CLI, or webhook can call the generic genesis APIs later.
 
 ### Acceptance Criteria
 
-- Hermes is represented as a normal participant.
-- Hermes can discover existing Patch Panels if it has `patch_panel:discover`.
-- Hermes can create Cards if it has `card:create` in scope.
-- Hermes can propose Patch Panels if it has `mutation:propose` and design permissions.
-- Hermes cannot publish its own proposal without reviewer/publisher permission.
-- All Hermes actions emit participant and authorization audit events.
+- No agent-specific endpoint, role, table, or namespace is introduced.
+- Intent ingress accepts structured requests through `/genesis/intents`.
+- Any participant can discover existing Patch Panels if it has `patch_panel:discover`.
+- Any participant can create Cards if it has `card:create` in scope.
+- Any participant can propose Patch Panels if it has `mutation:propose` and design permissions.
+- A proposing participant cannot publish its own proposal without reviewer/publisher permission.
+- All genesis actions emit participant and authorization audit events.
 
 ## Workstream 8: API and SDK Updates
 
@@ -363,7 +367,7 @@ Phase 10: Participant Authority, Workflow Registry, and Hermes Genesis.
 - Protected endpoint allow/deny behavior.
 - Patch Panel registry create/search/archive behavior.
 - Patch Panel proposal validate/approve/reject behavior.
-- Hermes can discover and propose, but cannot self-promote.
+- Workflow Architect participants can discover and propose, but cannot self-promote.
 - Shadow participant still cannot execute production sink.
 - Existing Phase 0-9 regression suite passes.
 
@@ -404,10 +408,10 @@ docker compose config
 - Extend Patch Panel registration or add registry-specific endpoints.
 - Add exact-match discovery APIs and tests.
 
-### Day 5: Proposals and Hermes MVP
+### Day 5: Proposals and Intent-Driven Genesis MVP
 
 - Add Patch Panel proposal lifecycle.
-- Add Hermes role and structured intent service.
+- Add Intent Operator and Workflow Architect roles plus the structured intent service.
 - Add workflow genesis example and docs.
 
 ### Day 6: Hardening
@@ -432,7 +436,7 @@ docker compose config
 - Participant persistence migration.
 - Patch Panel registry metadata and discovery APIs.
 - Governed Patch Panel proposal lifecycle.
-- Hermes Chief-of-Staff MVP as a normal participant and workflow designer.
+- Intent-driven genesis MVP through neutral participants, roles, and `/genesis` APIs.
 - Updated architecture and API documentation.
 - Passing regression and new governance tests.
 
@@ -444,4 +448,4 @@ docker compose config
 - Redaction events and retention policy enforcement.
 - Scoped secrets and tool access policies.
 - Subworkflow execution.
-- LLM-backed Hermes intent interpretation after the structured Hermes mechanics are proven.
+- LLM-backed intent interpretation outside the runtime after the structured genesis mechanics are proven.

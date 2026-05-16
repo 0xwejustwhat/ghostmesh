@@ -2,14 +2,14 @@
 
 ## Purpose
 
-The Patch Panel registry makes explicit workflow definitions discoverable, governable, and reusable. It is the missing bridge between the current runtime, which can register and execute Patch Panels, and Hermes-style workflow genesis, which needs to find or propose workflows from user intent.
+The Patch Panel registry makes explicit workflow definitions discoverable, governable, and reusable. It is the missing bridge between the current runtime, which can register and execute Patch Panels, and intent-driven workflow genesis, which needs to find or propose workflows from user intent.
 
 The registry does not replace Patch Panels. Patch Panels remain declarative graph documents. The registry indexes them.
 
 ## Design Goals
 
 - Preserve Patch Panels as explicit, portable workflow definitions.
-- Add metadata that supports discovery by humans, agents, and Hermes.
+- Add metadata that supports discovery by humans, agents, scripts, webhooks, and other external clients.
 - Keep runtime state separate from workflow definition state.
 - Support draft, review, published, archived, and superseded lifecycle states.
 - Make workflow discovery permissioned and auditable.
@@ -134,9 +134,9 @@ GET /registry/patchpanels/{entry_id}
 
 Registry mutation should require scoped Patch Panel or workflow owner/designer authority.
 
-## Hermes Discovery Flow
+## Intent-Driven Discovery Flow
 
-Hermes should discover workflows in this order:
+Authorized intent-ingress and workflow-architect participants should discover workflows in this order:
 
 1. Parse structured intent into candidate metadata filters.
 2. Search published registry entries.
@@ -162,5 +162,5 @@ This prevents a workflow file from granting itself published status.
 - Published Patch Panels can be discovered without loading every workflow file manually.
 - Archived and superseded workflows remain inspectable.
 - Registry mutation is permissioned and audited.
-- Hermes can search by structured intent without needing graph-wide authority.
+- Authorized participants can search by structured intent without needing graph-wide authority.
 - Registry metadata does not store runtime card payloads or artifact content.
