@@ -4,10 +4,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from ghostmesh.domain import Artifact, Card, CardEvent, Lease, PatchPanel
+from ghostmesh.domain import ArtifactReference, Card, CardEvent, Lease, PatchPanel
 from ghostmesh.runtime.errors import ConflictError, NotFoundError
 from ghostmesh.runtime.service import (
     ensure_active_lease,
+    ensure_artifact_refs_belong_to_card,
+    ensure_artifacts_accepted,
     ensure_bucket_exists,
     new_lease,
     resolve_initial_bucket,
@@ -23,7 +25,7 @@ class InMemoryCardRuntime:
         self._patch_panels: dict[str, PatchPanel] = {}
         self._cards: dict[UUID, Card] = {}
         self._leases: dict[UUID, Lease] = {}
-        self._artifacts: dict[UUID, Artifact] = {}
+        self._artifacts: dict[UUID, ArtifactReference] = {}
         self._events: dict[UUID, list[CardEvent]] = {}
         self._idempotency: dict[str, object] = {}
 
@@ -125,51 +127,65 @@ class InMemoryCardRuntime:
         *,
         lease_id: UUID,
         output_pipe: str,
-        payload: dict[str, Any],
+        artifact_refs: list[ArtifactReference],
         idempotency_key: str | None = None,
-    ) -> Artifact:
+    ) -> list[ArtifactReference]:
         if cached := self._get_idempotent(idempotency_key):
-            return _typed(cached, Artifact)
+            return _typed_artifacts(cached)
 
         lease = self._get_lease(lease_id)
         ensure_active_lease(lease)
         card = self._get_card(lease.card_id)
         patch_panel = self._single_patch_panel()
         destination_bucket, node_id = resolve_pipe_bucket(patch_panel, output_pipe, "output")
+        ensure_artifact_refs_belong_to_card(card_id=card.id, artifact_refs=artifact_refs)
+        ensure_artifacts_accepted(
+            patch_panel,
+            destination_bucket_id=destination_bucket,
+            artifact_refs=artifact_refs,
+        )
 
         if node_id != lease.node_id:
             raise ConflictError(
                 f"lease node '{lease.node_id}' cannot submit through node '{node_id}'"
             )
 
-        artifact = Artifact(
-            card_id=card.id,
-            node_id=node_id,
-            worker_id=lease.worker_id,
-            payload=payload,
-        )
-        self._artifacts[artifact.id] = artifact
-
         updated_card = card.model_copy(update={"current_bucket": destination_bucket})
         self._cards[card.id] = updated_card
         released_lease = lease.model_copy(update={"released_at": datetime.now(UTC)})
         self._leases[lease.id] = released_lease
-
-        self._record_event(
-            CardEvent(
-                card_id=card.id,
-                event_type="artifact_submitted",
-                actor_id=lease.worker_id,
-                payload={
-                    "artifact_id": str(artifact.id),
-                    "lease_id": str(lease.id),
-                    "output_pipe": output_pipe,
-                    "destination_bucket": destination_bucket,
-                },
-            )
+        event = CardEvent(
+            card_id=card.id,
+            event_type="artifact_submitted",
+            actor_id=lease.worker_id,
+            payload={
+                "artifact_ids": [str(ref.id) for ref in artifact_refs],
+                "artifact_refs": [
+                    {
+                        "id": str(ref.id),
+                        "storage_ref": ref.storage_ref,
+                        "content_hash": ref.content_hash,
+                        "content_type": ref.content_type,
+                        "size_bytes": ref.size_bytes,
+                        "metadata": ref.metadata,
+                    }
+                    for ref in artifact_refs
+                ],
+                "lease_id": str(lease.id),
+                "output_pipe": output_pipe,
+                "destination_bucket": destination_bucket,
+            },
         )
-        self._store_idempotent(idempotency_key, artifact)
-        return artifact
+        stored_refs = [
+            ref.model_copy(update={"card_id": card.id, "event_id": event.id})
+            for ref in artifact_refs
+        ]
+        for artifact_ref in stored_refs:
+            self._artifacts[artifact_ref.id] = artifact_ref
+
+        self._record_event(event)
+        self._store_idempotent(idempotency_key, stored_refs)
+        return stored_refs
 
     def renew_lease(
         self,
@@ -383,5 +399,13 @@ class InMemoryCardRuntime:
 
 def _typed(value: object, expected_type: type[Any]) -> Any:
     if not isinstance(value, expected_type):
+        raise ConflictError("idempotency key was already used for a different operation")
+    return value
+
+
+def _typed_artifacts(value: object) -> list[ArtifactReference]:
+    if not isinstance(value, list) or not all(
+        isinstance(item, ArtifactReference) for item in value
+    ):
         raise ConflictError("idempotency key was already used for a different operation")
     return value

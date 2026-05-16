@@ -7,10 +7,11 @@ from fastapi import FastAPI, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from ghostmesh.boundaries import BoundaryAdapterService, BoundarySinkRequest, BoundarySourceRequest
 from ghostmesh.config import Settings, get_settings
 from ghostmesh.db import create_database_engine
 from ghostmesh.domain import (
-    Artifact,
+    ArtifactReference,
     Card,
     CardEvent,
     Lease,
@@ -45,7 +46,7 @@ class ClaimCardRequest(BaseModel):
 class SubmitArtifactRequest(BaseModel):
     lease_id: UUID
     output_pipe: str
-    payload: dict[str, Any]
+    artifact_refs: list[ArtifactReference]
 
 
 class RenewLeaseRequest(BaseModel):
@@ -81,7 +82,7 @@ class WorkerExecutionRequest(BaseModel):
     input_pipe: str
     output_pipe: str
     worker_id: str
-    payload: dict[str, Any]
+    artifact_refs: list[ArtifactReference]
     lease_seconds: int = 300
 
 
@@ -223,11 +224,11 @@ def create_app(settings: Settings | None = None, runtime: CardRuntime | None = N
     def submit_artifact(
         request: SubmitArtifactRequest,
         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    ) -> Artifact:
+    ) -> list[ArtifactReference]:
         return runtime.submit_artifact(
             lease_id=request.lease_id,
             output_pipe=request.output_pipe,
-            payload=request.payload,
+            artifact_refs=request.artifact_refs,
             idempotency_key=idempotency_key,
         )
 
@@ -349,14 +350,14 @@ def create_app(settings: Settings | None = None, runtime: CardRuntime | None = N
     def execute_worker(
         request: WorkerExecutionRequest,
         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    ) -> Artifact:
+    ) -> list[ArtifactReference]:
         executor = _executor(runtime, request.patch_panel_id)
         return executor.execute_worker(
             WorkerExecutionInput(
                 input_pipe=request.input_pipe,
                 output_pipe=request.output_pipe,
                 worker_id=request.worker_id,
-                payload=request.payload,
+                artifact_refs=request.artifact_refs,
                 lease_seconds=request.lease_seconds,
                 idempotency_key=idempotency_key,
             )
@@ -410,6 +411,25 @@ def create_app(settings: Settings | None = None, runtime: CardRuntime | None = N
             idempotency_key=idempotency_key,
         )
         return {"event": result.event, "external_reference": result.external_reference}
+
+    @app.post("/boundaries/source")
+    def execute_boundary_source(request: BoundarySourceRequest) -> dict[str, Any]:
+        result = BoundaryAdapterService(runtime=runtime).execute_source(request)
+        return {
+            "card": result.card,
+            "deduplication_key": result.deduplication_key,
+            "adapter": result.adapter,
+        }
+
+    @app.post("/boundaries/sink")
+    def execute_boundary_sink(request: BoundarySinkRequest) -> dict[str, Any]:
+        result = BoundaryAdapterService(runtime=runtime).execute_sink(request)
+        return {
+            "event": result.event,
+            "external_reference": result.external_reference,
+            "egress_idempotency_key": result.egress_idempotency_key,
+            "adapter": result.adapter,
+        }
 
     @app.post("/shadows")
     def create_shadow(

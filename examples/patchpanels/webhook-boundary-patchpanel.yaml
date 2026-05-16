@@ -1,0 +1,61 @@
+id: webhook_boundary
+version: "1.0.0"
+description: Webhook source and HTTP/MCP-ready sink boundary example.
+
+buckets:
+  - id: intake
+    description: External events admitted through the source boundary.
+  - id: done
+    description: Cards ready for controlled egress.
+
+nodes:
+  - id: github_issue_source
+    type: source
+    output_pipes:
+      - issue_output
+    config:
+      boundary_contract:
+        adapter: github_issue_webhook
+        auth:
+          token: dev-webhook-token
+        deduplication_key: headers.X-GitHub-Delivery
+        target_workflow_version: webhook_boundary:1.0.0
+        payload_map:
+          title: payload.issue.title
+          body: payload.issue.body
+          external_url: payload.issue.html_url
+        metadata_map:
+          repository: payload.repository.full_name
+          sender: payload.sender.login
+  - id: notification_sink
+    type: sink
+    input_pipes:
+      - notification_input
+    config:
+      boundary_contract:
+        adapter: http_webhook_egress
+        auth:
+          token: dev-egress-token
+        idempotency_key: card_id + sink_id
+        external_reference_path: external_response.message_ts
+        payload_map:
+          title: card.payload.title
+          external_url: card.payload.external_url
+      mcp:
+        mode: edge_adapter
+        tool: slack.send_message
+
+pipe_bindings:
+  issue_output:
+    node: github_issue_source
+    direction: output
+    bucket: done
+  notification_input:
+    node: notification_sink
+    direction: input
+    bucket: done
+
+edges:
+  - from: github_issue_source
+    to: notification_sink
+    on: card_created

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import httpx
 
+from ghostmesh.artifacts import LocalGitArtifactStore
 from ghostmesh.sdk import WorkerClient
+from tests.helpers import artifact_ref
 
 
 def test_worker_client_claims_and_submits_through_pipes(monkeypatch) -> None:
@@ -30,7 +32,7 @@ def test_worker_client_claims_and_submits_through_pipes(monkeypatch) -> None:
             return httpx.Response(200, json={"id": "lease-1", "released": True}, request=request)
         return httpx.Response(
             200,
-            json={"id": "artifact-1", "payload": json["payload"]},
+            json=json["artifact_refs"],
             request=request,
         )
 
@@ -53,10 +55,10 @@ def test_worker_client_claims_and_submits_through_pipes(monkeypatch) -> None:
     client = WorkerClient("http://mesh.local", worker_id="worker-1", auth_token="lease-token")
 
     lease = client.claim(input_pipe="worker_input", idempotency_key="claim-key")
-    artifact = client.submit(
+    artifact_refs = client.submit(
         lease_id=lease["id"],
         output_pipe="worker_output",
-        payload={"answer": "done"},
+        artifact_refs=[artifact_ref(card_id="11111111-1111-1111-1111-111111111111")],
         idempotency_key="submit-key",
     )
     renewed = client.renew(
@@ -68,7 +70,7 @@ def test_worker_client_claims_and_submits_through_pipes(monkeypatch) -> None:
     context = client.context(lease_id=lease["id"])
 
     assert lease["id"] == "lease-1"
-    assert artifact["payload"] == {"answer": "done"}
+    assert artifact_refs[0]["metadata"]["role"] == "draft"
     assert renewed["renewed"] is True
     assert released["released"] is True
     assert context["card"]["id"] == "card-1"
@@ -82,7 +84,22 @@ def test_worker_client_claims_and_submits_through_pipes(monkeypatch) -> None:
         {
             "lease_id": "lease-1",
             "output_pipe": "worker_output",
-            "payload": {"answer": "done"},
+            "artifact_refs": [
+                {
+                    "card_id": "11111111-1111-1111-1111-111111111111",
+                    "content_hash": "sha256:" + ("a" * 64),
+                    "content_type": "text/plain",
+                    "created_at": artifact_refs[0]["created_at"],
+                    "event_id": None,
+                    "id": artifact_refs[0]["id"],
+                    "metadata": {"role": "draft"},
+                    "size_bytes": 12,
+                    "storage_ref": (
+                        "git:working-tree:artifacts/"
+                        "11111111-1111-1111-1111-111111111111/draft.txt"
+                    ),
+                }
+            ],
         },
         {"Idempotency-Key": "submit-key", "Authorization": "Bearer lease-token"},
     )
@@ -100,3 +117,23 @@ def test_worker_client_claims_and_submits_through_pipes(monkeypatch) -> None:
         "http://mesh.local/workers/leases/lease-1/context",
         {"Authorization": "Bearer lease-token"},
     )
+
+
+def test_worker_client_uploads_bytes_through_artifact_store(tmp_path) -> None:
+    client = WorkerClient("http://mesh.local", worker_id="worker-1")
+    store = LocalGitArtifactStore(tmp_path)
+    artifact = client.upload_bytes(
+        store,
+        card_id="11111111-1111-1111-1111-111111111111",
+        data=b"hello",
+        filename="draft.txt",
+        content_type="text/plain",
+        metadata={"role": "draft"},
+    )
+
+    assert artifact.content_hash == (
+        "sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e730"
+        "43362938b9824"
+    )
+    assert artifact.storage_ref.startswith("file://")
+    assert artifact.metadata == {"role": "draft"}

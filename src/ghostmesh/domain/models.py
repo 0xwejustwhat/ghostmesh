@@ -85,14 +85,17 @@ class WorkflowVersion(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class Artifact(BaseModel):
+class ArtifactReference(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: UUID = Field(default_factory=uuid4)
     card_id: UUID
-    node_id: str
-    worker_id: str | None = None
-    payload: dict[str, Any]
+    event_id: UUID | None = None
+    storage_ref: str = Field(min_length=1)
+    content_hash: str = Field(min_length=1)
+    content_type: str = Field(min_length=1)
+    size_bytes: int = Field(ge=0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

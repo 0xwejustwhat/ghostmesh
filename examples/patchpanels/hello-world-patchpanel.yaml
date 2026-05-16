@@ -21,6 +21,11 @@ acceptance_contracts:
   - id: basic_review
     description: Human validator confirms that the artifact is acceptable.
     rules:
+      - type: artifact_reference_structure
+      - type: required_artifacts
+        min_count: 1
+        roles:
+          - draft
       - type: human_review
 
 nodes:

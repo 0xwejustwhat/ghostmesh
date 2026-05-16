@@ -11,6 +11,7 @@ from ghostmesh.patchpanel import load_patch_panel
 from ghostmesh.persistence.tables import metadata
 from ghostmesh.runtime import InMemoryCardRuntime, PostgresCardRuntime
 from ghostmesh.runtime.errors import ConflictError
+from tests.helpers import artifact_ref
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "patchpanels"
 
@@ -59,7 +60,7 @@ def test_postgres_runtime_expired_lease_blocks_submit_and_can_be_reclaimed() -> 
         runtime.submit_artifact(
             lease_id=expired_lease.id,
             output_pipe="worker_output",
-            payload={"draft": "too late"},
+            artifact_refs=[artifact_ref(card.id)],
         )
 
     expired = runtime.expire_leases()
@@ -75,20 +76,20 @@ def test_postgres_runtime_submit_is_idempotent_and_releases_lease() -> None:
     card = runtime.create_card(patch_panel_id="hello_world", payload={"task": "submit"})
     lease = runtime.claim_card(input_pipe="worker_input", worker_id="worker-a")
 
-    artifact = runtime.submit_artifact(
+    artifact_refs = runtime.submit_artifact(
         lease_id=lease.id,
         output_pipe="worker_output",
-        payload={"draft": "first"},
+        artifact_refs=[artifact_ref(card.id)],
         idempotency_key="submit-1",
     )
-    same_artifact = runtime.submit_artifact(
+    same_artifact_refs = runtime.submit_artifact(
         lease_id=lease.id,
         output_pipe="worker_output",
-        payload={"draft": "second"},
+        artifact_refs=[artifact_ref(card.id)],
         idempotency_key="submit-1",
     )
 
-    assert same_artifact.id == artifact.id
+    assert same_artifact_refs[0].id == artifact_refs[0].id
     assert runtime.list_cards()[0].current_bucket == "validation_inbox"
     assert [event.event_type for event in runtime.card_history(card.id)] == [
         "card_created",

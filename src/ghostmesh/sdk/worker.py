@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 import httpx
+
+from ghostmesh.artifacts import ArtifactStore
+from ghostmesh.domain import ArtifactReference
 
 
 class WorkerClient:
@@ -50,17 +54,43 @@ class WorkerClient:
         *,
         lease_id: str,
         output_pipe: str,
-        payload: dict[str, Any],
+        artifact_refs: list[ArtifactReference | dict[str, Any]],
         idempotency_key: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> list[dict[str, Any]]:
+        serialized_refs = [
+            ref.model_dump(mode="json") if isinstance(ref, ArtifactReference) else ref
+            for ref in artifact_refs
+        ]
         response = httpx.post(
             f"{self.base_url}/cards/submit",
-            json={"lease_id": lease_id, "output_pipe": output_pipe, "payload": payload},
+            json={
+                "lease_id": lease_id,
+                "output_pipe": output_pipe,
+                "artifact_refs": serialized_refs,
+            },
             headers=self._headers(idempotency_key),
             timeout=self.timeout,
         )
         response.raise_for_status()
         return response.json()
+
+    def upload_bytes(
+        self,
+        store: ArtifactStore,
+        *,
+        card_id: str | UUID,
+        data: bytes,
+        filename: str,
+        content_type: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> ArtifactReference:
+        return store.put_bytes(
+            card_id=UUID(str(card_id)),
+            data=data,
+            filename=filename,
+            content_type=content_type,
+            metadata=metadata,
+        )
 
     def renew(
         self,

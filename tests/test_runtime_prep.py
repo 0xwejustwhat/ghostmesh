@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from ghostmesh.api.main import create_app
 from ghostmesh.patchpanel import load_patch_panel
 from ghostmesh.runtime import InMemoryCardRuntime, ShadowHarness
+from tests.helpers import artifact_ref
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "patchpanels"
 
@@ -30,10 +31,10 @@ def test_runtime_claim_submit_validate_move_flow() -> None:
         worker_id="worker-a",
         idempotency_key="claim-1",
     )
-    artifact = runtime.submit_artifact(
+    artifact_refs = runtime.submit_artifact(
         lease_id=lease.id,
         output_pipe="worker_output",
-        payload={"draft": "hello"},
+        artifact_refs=[artifact_ref(card.id)],
         idempotency_key="submit-1",
     )
     event = runtime.validate_card(
@@ -45,7 +46,8 @@ def test_runtime_claim_submit_validate_move_flow() -> None:
     )
 
     assert same_card.id == card.id
-    assert artifact.card_id == card.id
+    assert artifact_refs[0].card_id == card.id
+    assert artifact_refs[0].storage_ref.startswith("git:working-tree:")
     assert event.payload["accepted"] is True
     assert runtime.list_cards()[0].current_bucket == "junction_inbox"
     assert [entry.event_type for entry in runtime.card_history(card.id)] == [
@@ -83,13 +85,15 @@ def test_api_exposes_patchpanel_card_claim_and_submit() -> None:
         json={
             "lease_id": claim_response.json()["id"],
             "output_pipe": "worker_output",
-            "payload": {"draft": "submitted"},
+            "artifact_refs": [
+                artifact_ref(card_id=create_response.json()["id"]).model_dump(mode="json")
+            ],
         },
         headers={"Idempotency-Key": "api-submit-1"},
     )
 
     assert submit_response.status_code == 200, submit_response.text
-    assert submit_response.json()["payload"] == {"draft": "submitted"}
+    assert submit_response.json()[0]["metadata"]["role"] == "draft"
 
 
 def test_shadow_harness_creates_linked_isolated_shadow_card() -> None:

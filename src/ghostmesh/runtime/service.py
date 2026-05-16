@@ -4,7 +4,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID
 
-from ghostmesh.domain import Artifact, Card, CardEvent, Lease, NodeType, PatchPanel
+from ghostmesh.artifacts import validate_artifact_references
+from ghostmesh.domain import ArtifactReference, Card, CardEvent, Lease, NodeType, PatchPanel
 from ghostmesh.patchpanel import PatchPanelValidator
 from ghostmesh.runtime.errors import ConflictError, InvalidOperationError, NotFoundError
 
@@ -43,9 +44,9 @@ class CardRuntime(Protocol):
         *,
         lease_id: UUID,
         output_pipe: str,
-        payload: dict[str, Any],
+        artifact_refs: list[ArtifactReference],
         idempotency_key: str | None = None,
-    ) -> Artifact: ...
+    ) -> list[ArtifactReference]: ...
 
     def renew_lease(
         self,
@@ -153,6 +154,48 @@ def new_lease(*, card: Card, node_id: str, worker_id: str, input_pipe: str, seco
         input_pipe=input_pipe,
         expires_at=datetime.now(UTC) + timedelta(seconds=seconds),
     )
+
+
+def ensure_artifacts_accepted(
+    patch_panel: PatchPanel,
+    *,
+    destination_bucket_id: str,
+    artifact_refs: list[ArtifactReference],
+) -> None:
+    bucket = next(
+        (bucket for bucket in patch_panel.buckets if bucket.id == destination_bucket_id),
+        None,
+    )
+    if bucket is None:
+        raise InvalidOperationError(f"bucket '{destination_bucket_id}' is not declared")
+    contract_id = bucket.acceptance_contract
+    if contract_id is None:
+        return
+    contract = next(
+        (contract for contract in patch_panel.acceptance_contracts if contract.id == contract_id),
+        None,
+    )
+    if contract is None:
+        raise InvalidOperationError(
+            f"bucket '{destination_bucket_id}' references unknown acceptance contract "
+            f"'{contract_id}'"
+        )
+    validate_artifact_references(artifact_refs, contract)
+
+
+def ensure_artifact_refs_belong_to_card(
+    *,
+    card_id: UUID,
+    artifact_refs: list[ArtifactReference],
+) -> None:
+    if not artifact_refs:
+        raise InvalidOperationError("submit requires at least one artifact reference")
+    for artifact_ref in artifact_refs:
+        if artifact_ref.card_id != card_id:
+            raise InvalidOperationError(
+                f"artifact '{artifact_ref.id}' belongs to card '{artifact_ref.card_id}', "
+                f"not '{card_id}'"
+            )
 
 
 def _find_node_for_pipe(patch_panel: PatchPanel, pipe: str, direction: str) -> str:

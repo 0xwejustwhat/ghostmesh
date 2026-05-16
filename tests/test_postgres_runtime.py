@@ -5,8 +5,9 @@ from pathlib import Path
 from sqlalchemy import create_engine, select
 
 from ghostmesh.patchpanel import load_patch_panel
-from ghostmesh.persistence.tables import card_events, card_locations, metadata
+from ghostmesh.persistence.tables import artifacts, card_events, card_locations, metadata
 from ghostmesh.runtime import PostgresCardRuntime
+from tests.helpers import artifact_ref
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "patchpanels"
 
@@ -38,10 +39,10 @@ def test_postgres_runtime_persists_card_location_and_evidence() -> None:
         worker_id="postgres-worker",
         idempotency_key="claim-durable-1",
     )
-    artifact = runtime.submit_artifact(
+    artifact_refs = runtime.submit_artifact(
         lease_id=lease.id,
         output_pipe="worker_output",
-        payload={"draft": "durable artifact"},
+        artifact_refs=[artifact_ref(card.id)],
         idempotency_key="submit-durable-1",
     )
     history = runtime.card_history(card.id)
@@ -53,10 +54,14 @@ def test_postgres_runtime_persists_card_location_and_evidence() -> None:
                 card_locations.c.card_id == card.id
             )
         ).all()
+        artifact_rows = connection.execute(select(artifacts)).all()
 
     assert same_card.id == card.id
     assert same_lease.id == lease.id
-    assert artifact.card_id == card.id
+    assert artifact_refs[0].card_id == card.id
+    assert artifact_refs[0].content_hash.startswith("sha256:")
+    assert artifact_rows[0]._mapping["storage_ref"].startswith("git:working-tree:")
+    assert "payload" not in artifacts.c
     assert [event.event_type for event in history] == [
         "card_created",
         "card_claimed",

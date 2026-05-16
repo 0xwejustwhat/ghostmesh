@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from ghostmesh.api.main import create_app
 from ghostmesh.patchpanel import load_patch_panel
 from ghostmesh.runtime import InMemoryCardRuntime
+from tests.helpers import artifact_ref
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "patchpanels"
 
@@ -39,7 +40,7 @@ def test_human_validator_can_list_inspect_and_decide_reviewable_cards() -> None:
     runtime.submit_artifact(
         lease_id=lease.id,
         output_pipe="worker_output",
-        payload={"draft": "ready for review"},
+        artifact_refs=[artifact_ref(card.id)],
     )
     client = TestClient(create_app(runtime=runtime))
 
@@ -66,4 +67,3 @@ def test_human_validator_can_list_inspect_and_decide_reviewable_cards() -> None:
     assert decision_response.status_code == 200, decision_response.text
     assert decision_response.json()["payload"]["accepted"] is True
     assert "card_validated" in [event.event_type for event in runtime.card_history(card.id)]
-

@@ -2,7 +2,7 @@
 
 from ghostmesh.domain.models import (
     AcceptanceContract,
-    Artifact,
+    ArtifactReference,
     BucketDefinition,
     Card,
     CardEvent,
@@ -22,7 +22,7 @@ from ghostmesh.domain.models import (
 
 __all__ = [
     "AcceptanceContract",
-    "Artifact",
+    "ArtifactReference",
     "BucketDefinition",
     "Card",
     "CardEvent",

@@ -8,6 +8,7 @@ from ghostmesh.api.main import create_app
 from ghostmesh.nodes import HumanValidationInput, NodeExecutor, WorkerExecutionInput
 from ghostmesh.patchpanel import load_patch_panel
 from ghostmesh.runtime import InMemoryCardRuntime
+from tests.helpers import artifact_ref
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "patchpanels"
 
@@ -22,12 +23,12 @@ def test_node_executor_runs_canonical_workflow_to_sink() -> None:
         source_id="intake_source",
         payload={"title": "Node execution"},
     )
-    artifact = executor.execute_worker(
+    artifact_refs = executor.execute_worker(
         WorkerExecutionInput(
             input_pipe="worker_input",
             output_pipe="worker_output",
             worker_id="worker-1",
-            payload={"draft": "ready"},
+            artifact_refs=[artifact_ref(card.id)],
         )
     )
     validation = executor.execute_human_validator(
@@ -46,7 +47,7 @@ def test_node_executor_runs_canonical_workflow_to_sink() -> None:
         external_reference="archive://card",
     )
 
-    assert artifact.card_id == card.id
+    assert artifact_refs[0].card_id == card.id
     assert validation.payload["accepted"] is True
     assert decision.selected_bucket == "done"
     assert sink.external_reference == "archive://card"
@@ -110,7 +111,7 @@ def test_node_execution_api_runs_source_worker_validator_junction_sink() -> None
             "input_pipe": "worker_input",
             "output_pipe": "worker_output",
             "worker_id": "api-worker",
-            "payload": {"draft": "api draft"},
+            "artifact_refs": [artifact_ref(card_id=card_id).model_dump(mode="json")],
         },
     )
     validator_response = client.post(
@@ -148,4 +149,3 @@ def test_node_execution_api_runs_source_worker_validator_junction_sink() -> None
     assert sink_response.status_code == 200, sink_response.text
     assert junction_response.json()["selected_bucket"] == "done"
     assert sink_response.json()["external_reference"] == "archive://api-card"
-

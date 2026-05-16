@@ -4,7 +4,7 @@ Ghost Mesh is a graph-native accountability substrate for human and AI work.
 
 ## Current Implementation Status
 
-Phase 0 and Phase 1 are implemented.
+Phase 0 through Phase 6.5 are implemented.
 
 Phase 0 foundation:
 
@@ -19,7 +19,7 @@ Phase 0 foundation:
 
 Phase 1 graph model and validation:
 
-- Pydantic domain models for Patch Panels, Cards, Buckets, Nodes, Edges, Pipe Bindings, Acceptance Contracts, Workflow Versions, Leases, Artifacts, and Events
+- Pydantic domain models for Patch Panels, Cards, Buckets, Nodes, Edges, Pipe Bindings, Acceptance Contracts, Workflow Versions, Leases, Artifact References, and Events
 - YAML/JSON Patch Panel loading
 - NetworkX-backed graph validation
 - Example Patch Panels
@@ -29,7 +29,7 @@ Phase 2 runtime state:
 
 - In-memory `CardRuntime` for card claim, submit, validate, move, and history
 - Postgres-backed card runtime for durable card creation, movement, and evidence replay
-- Runtime tables and Alembic migrations for workflow versions, buckets, cards, card locations, leases, artifacts, events, validation results, and idempotency records
+- Runtime tables and Alembic migrations for workflow versions, buckets, cards, card locations, leases, artifact references, events, validation results, and idempotency records
 - Basic lease and idempotency primitives
 - REST endpoints for `/patchpanels`, `/cards`, claim, submit, validate, move, and history
 - Minimal pipe-aware `WorkerClient`
@@ -74,6 +74,17 @@ Phase 6 shadow and mutation safety:
 - REST endpoints for `/shadows` and `/mutations`
 - Tests proving shadow isolation, sampling/parallel limits, and mutation validation before promotion
 
+Phase 6.5 artifact storage boundary:
+
+- `ArtifactReference` replaces artifact content storage in the runtime contract
+- `/cards/submit`, node worker execution, and the Worker SDK accept one or more artifact references
+- Postgres stores only artifact reference metadata: `storage_ref`, `content_hash`, `content_type`, `size_bytes`, and metadata
+- Event evidence records artifact IDs, hashes, and storage references, never artifact bodies
+- Local filesystem/Git working-tree artifact store for development and version-controlled outputs
+- S3/MinIO-compatible artifact store for production binaries and large media
+- Acceptance contract rules can require artifact reference structure, count, and roles
+- Migration `20260514_0004` removes the legacy artifact payload column and marks legacy rows for manual rehydration
+
 Docker Compose startup has been verified with the API and Postgres containers running locally.
 
 ## Developer Setup
@@ -106,4 +117,30 @@ curl -X POST "http://localhost:8000/validators/human_validator/cards/<card_id>/d
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: validator-decision-1" \
   -d '{"patch_panel_id":"hello_world","accepted":true,"score":9,"reason":"Approved"}'
+```
+
+Worker artifact submission sketch:
+
+```python
+from ghostmesh.artifacts import LocalGitArtifactStore
+from ghostmesh.sdk import WorkerClient
+
+client = WorkerClient("http://localhost:8000", worker_id="worker-1")
+lease = client.claim(input_pipe="worker_input")
+context = client.context(lease_id=lease["id"])
+store = LocalGitArtifactStore("artifacts", repo_root=".")
+
+artifact = client.upload_bytes(
+    store,
+    card_id=context["card"]["id"],
+    data=b"draft output",
+    filename="draft.txt",
+    content_type="text/plain",
+    metadata={"role": "draft"},
+)
+client.submit(
+    lease_id=lease["id"],
+    output_pipe="worker_output",
+    artifact_refs=[artifact],
+)
 ```

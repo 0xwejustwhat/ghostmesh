@@ -10,16 +10,18 @@ This document preserves the existing implementation blueprint as source material
 
 Last updated: 2026-05-14
 
-- Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, and Phase 6 are implemented.
+- Phase 0, Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 6.5, and Phase 7 are implemented.
 - The repository now includes a Poetry-managed Python package, FastAPI app, Docker Compose configuration, Alembic scaffolding, structured logging setup, Ruff linting, Makefile commands, and baseline GitHub Actions CI.
 - Implemented Phase 1 scope includes Pydantic domain models, YAML/JSON Patch Panel loading, NetworkX-backed graph validation, example Patch Panels, and Pytest coverage.
-- Phase 2 scope includes durable workflow versions, buckets, cards, card locations, artifacts, card events, validation results, leases, and idempotency records; a Postgres-backed card runtime; append-only evidence replay; source-node card creation; REST access to cards and history; a minimal pipe-aware `WorkerClient`; and a shadow card harness.
+- Phase 2 scope includes durable workflow versions, buckets, cards, card locations, artifact references, card events, validation results, leases, and idempotency records; a Postgres-backed card runtime; append-only evidence replay; source-node card creation; REST access to cards and history; a minimal pipe-aware `WorkerClient`; and a shadow card harness.
 - Phase 3 scope includes pipe-aware claim and submit flow, Postgres row-lock claim selection, lease renewal, lease release, lease expiry recovery, idempotent claim/submit/renew/release/validate/move operations, and REST endpoints for lease lifecycle actions.
 - Phase 4 scope includes an MVP `NodeExecutor`, executable Source/Worker/Human Validator/Junction/Sink behavior, deterministic junction routing, sink egress evidence, node execution REST endpoints, and a canonical Source to Worker to Human Validator to Junction to Sink workflow.
 - Phase 5 scope includes worker lease context inspection, SDK auth/idempotency headers, SDK claim/submit/renew/release/context helpers, human validator review queues, card/evidence inspection, and accept/reject decision endpoints.
 - Phase 6 scope includes shadow card links, sampling and max-parallel controls, production sink isolation for shadow cards, proposed mutation records, mutation validation gates, promotion gates, shadow comparison metrics, and REST endpoints for shadow and mutation flows.
+- Phase 6.5 scope removes artifact content from Postgres, replaces artifact payload submission with `ArtifactReference` lists, adds local Git/filesystem and S3-compatible artifact stores, validates artifact reference structure/count/roles through acceptance contracts, and documents the storage boundary.
+- Phase 7 scope adds controlled Source and Sink boundary contracts, webhook/API boundary endpoints, payload and metadata mapping, Source deduplication keys, Sink egress idempotency keys, external reference recording, MCP edge-adapter example configuration, and GitHub issue to notification webhook examples.
 - Verification commands: `poetry run ruff check .`, `poetry run pytest`, `poetry run alembic upgrade head`, `poetry run alembic current`, `docker compose config`, `docker compose up --build -d`, `curl http://localhost:8000/health`, `curl http://localhost:8000/cards`, and `docker compose exec -T postgres pg_isready -U ghostmesh -d ghostmesh`.
-- Latest verification result: Ruff passed, 28 tests passed, Alembic reports `20260514_0003 (head)`, Docker Compose config validated, API and Postgres containers started, `/health` returned `{"status":"ok"}`, `/cards` returned from the database-backed API, and Postgres accepted connections.
+- Latest verification result: Ruff passed and 35 tests passed for the Phase 7 implementation. Previous Docker/Alembic verification remains: Alembic reports `20260514_0004 (head)`, Docker Compose rebuilt and started the API/Postgres stack, `/health` returned `{"status":"ok"}`, `/cards` returned from the database-backed API, and Postgres accepted connections.
 
 ## Source Materials
 
@@ -249,7 +251,40 @@ Enable safe worker and process auditions without allowing shadow activity to mut
 - Promotion updates the active Patch Panel version atomically.
 - Tests prove worker and process shadow lanes remain isolated from production effects.
 
+## Phase 6.5: Artifact Storage Boundary Cleanup
+
+Implementation status: complete.
+
+### Goal
+
+Keep Postgres as a lightweight accountability and routing index by removing artifact content storage before external boundary adapters arrive.
+
+### Implementation
+
+- Replace artifact payload submission with `ArtifactReference` submission.
+- Require workers to upload artifacts to external storage before calling submit.
+- Allow one or more artifact references per lease submission.
+- Store only `storage_ref`, `content_hash`, `content_type`, `size_bytes`, metadata, card ID, event ID, and timestamps in Postgres.
+- Add local filesystem/Git working-tree storage for development and version-controlled work products.
+- Add S3/MinIO-compatible storage for production binaries, media, and large artifacts.
+- Preserve evidence trail auditability through artifact IDs, references, hashes, sizes, and metadata.
+- Add acceptance contract validation for artifact reference structure, minimum counts, and required roles.
+- Add a migration path that removes legacy `payload` storage from `artifacts` and marks legacy rows for manual rehydration.
+
+### Acceptance Criteria
+
+- `ArtifactReference` is the runtime artifact model.
+- `/cards/submit`, node worker execution, and the Worker SDK accept `list[ArtifactReference]`.
+- Postgres has no artifact payload/content column.
+- Artifact references require a sha256 content hash and storage reference.
+- Local Git/filesystem and S3-compatible artifact stores are available.
+- Worker SDK helpers can upload bytes and return artifact references.
+- Acceptance contracts can reject missing or malformed artifact bundles.
+- Existing shadow, validation, and movement flows continue to pass tests.
+
 ## Phase 7: Boundary Adapters and MCP Integration
+
+Implementation status: complete.
 
 ### Goal
 

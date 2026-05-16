@@ -6,7 +6,14 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from ghostmesh.domain import Artifact, Card, CardEvent, NodeDefinition, NodeType, PatchPanel
+from ghostmesh.domain import (
+    ArtifactReference,
+    Card,
+    CardEvent,
+    NodeDefinition,
+    NodeType,
+    PatchPanel,
+)
 from ghostmesh.runtime import CardRuntime
 from ghostmesh.runtime.errors import InvalidOperationError, NotFoundError
 
@@ -15,7 +22,7 @@ class WorkerExecutionInput(BaseModel):
     input_pipe: str
     output_pipe: str
     worker_id: str
-    payload: dict[str, Any]
+    artifact_refs: list[ArtifactReference]
     lease_seconds: int = 300
     idempotency_key: str | None = None
 
@@ -74,7 +81,7 @@ class NodeExecutor:
         )
         return card
 
-    def execute_worker(self, request: WorkerExecutionInput) -> Artifact:
+    def execute_worker(self, request: WorkerExecutionInput) -> list[ArtifactReference]:
         node_id = self._node_for_pipe(request.input_pipe, NodeType.WORKER).id
         lease = self.runtime.claim_card(
             input_pipe=request.input_pipe,
@@ -82,20 +89,26 @@ class NodeExecutor:
             lease_seconds=request.lease_seconds,
             idempotency_key=f"{request.idempotency_key}:claim" if request.idempotency_key else None,
         )
-        artifact = self.runtime.submit_artifact(
+        artifact_refs = self.runtime.submit_artifact(
             lease_id=lease.id,
             output_pipe=request.output_pipe,
-            payload=request.payload,
+            artifact_refs=request.artifact_refs,
             idempotency_key=(
                 f"{request.idempotency_key}:submit" if request.idempotency_key else None
             ),
         )
-        if artifact.node_id != node_id:
+        if not artifact_refs:
+            raise InvalidOperationError("worker execution produced no artifact references")
+        event = self.runtime.card_history(lease.card_id)[-1]
+        event_node_id = self.patch_panel.pipe_bindings[request.output_pipe].node
+        if event_node_id != node_id:
             raise InvalidOperationError(
-                f"worker pipe '{request.input_pipe}' resolved to '{node_id}' but artifact "
-                f"was submitted by '{artifact.node_id}'"
+                f"worker pipe '{request.input_pipe}' resolved to '{node_id}' but output pipe "
+                f"was bound to '{event_node_id}'"
             )
-        return artifact
+        if event.event_type != "artifact_submitted":
+            raise InvalidOperationError("worker execution did not submit artifacts")
+        return artifact_refs
 
     def execute_human_validator(self, request: HumanValidationInput) -> CardEvent:
         node = self._node(request.validator_id, NodeType.VALIDATOR)

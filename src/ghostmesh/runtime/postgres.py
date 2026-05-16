@@ -9,7 +9,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ghostmesh.domain import Artifact, Card, CardEvent, Lease, PatchPanel, ValidationResult
+from ghostmesh.domain import ArtifactReference, Card, CardEvent, Lease, PatchPanel, ValidationResult
 from ghostmesh.persistence.tables import (
     artifacts,
     buckets,
@@ -25,6 +25,8 @@ from ghostmesh.persistence.tables import (
 from ghostmesh.runtime.errors import ConflictError, NotFoundError
 from ghostmesh.runtime.service import (
     ensure_active_lease,
+    ensure_artifact_refs_belong_to_card,
+    ensure_artifacts_accepted,
     ensure_bucket_exists,
     new_lease,
     resolve_initial_bucket,
@@ -228,40 +230,39 @@ class PostgresCardRuntime:
         *,
         lease_id: UUID,
         output_pipe: str,
-        payload: dict[str, Any],
+        artifact_refs: list[ArtifactReference],
         idempotency_key: str | None = None,
-    ) -> Artifact:
+    ) -> list[ArtifactReference]:
         with Session(self.engine) as session, session.begin():
             cached = self._get_idempotency(session, idempotency_key)
             if cached:
-                return self._get_artifact(session, UUID(cached.removeprefix("artifact:")))
+                if cached.startswith("artifact:"):
+                    return self._get_artifacts(session, [UUID(cached.removeprefix("artifact:"))])
+                return self._get_artifacts(
+                    session,
+                    [
+                        UUID(artifact_id)
+                        for artifact_id in cached.removeprefix("artifacts:").split(",")
+                        if artifact_id
+                    ],
+                )
 
             lease = self._get_lease(session, lease_id)
             ensure_active_lease(lease)
             card = self._get_card(session, lease.card_id)
             patch_panel = self._get_patch_panel_for_card(session, card)
             destination_bucket, node_id = resolve_pipe_bucket(patch_panel, output_pipe, "output")
+            ensure_artifact_refs_belong_to_card(card_id=card.id, artifact_refs=artifact_refs)
+            ensure_artifacts_accepted(
+                patch_panel,
+                destination_bucket_id=destination_bucket,
+                artifact_refs=artifact_refs,
+            )
             if node_id != lease.node_id:
                 raise ConflictError(
                     f"lease node '{lease.node_id}' cannot submit through node '{node_id}'"
                 )
 
-            artifact = Artifact(
-                card_id=card.id,
-                node_id=node_id,
-                worker_id=lease.worker_id,
-                payload=payload,
-            )
-            session.execute(
-                artifacts.insert().values(
-                    id=artifact.id,
-                    card_id=artifact.card_id,
-                    node_id=artifact.node_id,
-                    worker_id=artifact.worker_id,
-                    payload=artifact.payload,
-                    created_at=artifact.created_at,
-                )
-            )
             self._move_card_row(
                 session,
                 card=card,
@@ -273,27 +274,54 @@ class PostgresCardRuntime:
             session.execute(
                 leases.update().where(leases.c.id == lease.id).values(released_at=datetime.now(UTC))
             )
-            self._insert_event(
-                session,
-                CardEvent(
-                    card_id=card.id,
-                    event_type="artifact_submitted",
-                    actor_id=lease.worker_id,
-                    payload={
-                        "artifact_id": str(artifact.id),
-                        "lease_id": str(lease.id),
-                        "output_pipe": output_pipe,
-                        "destination_bucket": destination_bucket,
-                    },
-                ),
+            event = CardEvent(
+                card_id=card.id,
+                event_type="artifact_submitted",
+                actor_id=lease.worker_id,
+                payload={
+                    "artifact_ids": [str(ref.id) for ref in artifact_refs],
+                    "artifact_refs": [
+                        {
+                            "id": str(ref.id),
+                            "storage_ref": ref.storage_ref,
+                            "content_hash": ref.content_hash,
+                            "content_type": ref.content_type,
+                            "size_bytes": ref.size_bytes,
+                            "metadata": ref.metadata,
+                        }
+                        for ref in artifact_refs
+                    ],
+                    "lease_id": str(lease.id),
+                    "output_pipe": output_pipe,
+                    "destination_bucket": destination_bucket,
+                },
             )
+            self._insert_event(session, event)
+            stored_refs = [
+                ref.model_copy(update={"card_id": card.id, "event_id": event.id})
+                for ref in artifact_refs
+            ]
+            for artifact_ref in stored_refs:
+                session.execute(
+                    artifacts.insert().values(
+                        id=artifact_ref.id,
+                        card_id=artifact_ref.card_id,
+                        event_id=artifact_ref.event_id,
+                        storage_ref=artifact_ref.storage_ref,
+                        content_hash=artifact_ref.content_hash,
+                        content_type=artifact_ref.content_type,
+                        size_bytes=artifact_ref.size_bytes,
+                        artifact_metadata=artifact_ref.metadata,
+                        created_at=artifact_ref.created_at,
+                    )
+                )
             self._store_idempotency(
                 session,
                 idempotency_key,
                 "artifact.submit",
-                f"artifact:{artifact.id}",
+                "artifacts:" + ",".join(str(ref.id) for ref in stored_refs),
             )
-            return artifact
+            return stored_refs
 
     def renew_lease(
         self,
@@ -600,18 +628,22 @@ class PostgresCardRuntime:
             released_at=row["released_at"],
         )
 
-    def _get_artifact(self, session: Session, artifact_id: UUID) -> Artifact:
-        row = session.execute(select(artifacts).where(artifacts.c.id == artifact_id)).first()
-        if row is None:
-            raise NotFoundError(f"artifact '{artifact_id}' does not exist")
-        return Artifact(
-            id=row._mapping["id"],
-            card_id=row._mapping["card_id"],
-            node_id=row._mapping["node_id"],
-            worker_id=row._mapping["worker_id"],
-            payload=row._mapping["payload"],
-            created_at=row._mapping["created_at"],
-        )
+    def _get_artifacts(
+        self,
+        session: Session,
+        artifact_ids: list[UUID],
+    ) -> list[ArtifactReference]:
+        if not artifact_ids:
+            return []
+        rows = session.execute(select(artifacts).where(artifacts.c.id.in_(artifact_ids))).all()
+        by_id = {
+            row._mapping["id"]: _artifact_reference_from_row(row._mapping)
+            for row in rows
+        }
+        missing = [artifact_id for artifact_id in artifact_ids if artifact_id not in by_id]
+        if missing:
+            raise NotFoundError(f"artifact '{missing[0]}' does not exist")
+        return [by_id[artifact_id] for artifact_id in artifact_ids]
 
     def _get_active_patch_panel(self, session: Session, patch_panel_id: str) -> PatchPanel:
         row = session.execute(
@@ -701,4 +733,18 @@ def _event_from_row(row: Any) -> CardEvent:
         actor_id=row["actor_id"],
         payload=row["payload"],
         occurred_at=row["occurred_at"],
+    )
+
+
+def _artifact_reference_from_row(row: Any) -> ArtifactReference:
+    return ArtifactReference(
+        id=row["id"],
+        card_id=row["card_id"],
+        event_id=row["event_id"],
+        storage_ref=row["storage_ref"],
+        content_hash=row["content_hash"],
+        content_type=row["content_type"],
+        size_bytes=row["size_bytes"],
+        metadata=row["artifact_metadata"],
+        created_at=row["created_at"],
     )

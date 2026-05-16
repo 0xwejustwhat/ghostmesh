@@ -1,6 +1,17 @@
 from __future__ import annotations
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, MetaData, String, Table, Text, Uuid
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    Uuid,
+)
 from sqlalchemy.sql.schema import Column
 
 metadata = MetaData()
@@ -86,9 +97,12 @@ artifacts = Table(
     metadata,
     Column("id", Uuid(as_uuid=True), primary_key=True),
     Column("card_id", Uuid(as_uuid=True), ForeignKey("cards.id"), nullable=False),
-    Column("node_id", String, nullable=False),
-    Column("worker_id", String, nullable=True),
-    Column("payload", JSON, nullable=False),
+    Column("event_id", Uuid(as_uuid=True), nullable=True),
+    Column("storage_ref", Text, nullable=False),
+    Column("content_hash", String, nullable=False),
+    Column("content_type", String, nullable=False),
+    Column("size_bytes", Integer, nullable=False),
+    Column("artifact_metadata", JSON, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
