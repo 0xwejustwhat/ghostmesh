@@ -4,7 +4,7 @@ Ghost Mesh is a graph-native accountability substrate for human and AI work.
 
 ## Current Implementation Status
 
-Phase 0 through Phase 9 are implemented.
+Phase 0 through Phase 10 are implemented.
 
 Phase 0 foundation:
 
@@ -109,6 +109,17 @@ Phase 9 open-source readiness:
 - Docker image instructions and Helm chart stub
 - CI validates Poetry install, Ruff, Alembic migrations, Docker Compose config, and tests
 
+Phase 10 participant authority, workflow registry, and intent-driven genesis:
+
+- Participant-neutral authority model for humans, agents, scripts, services, vendors, organizations, integrations, and subworkflows
+- Scoped roles, direct permission grants, role-derived grants, and authorization audit events
+- Participant persistence tables and nullable participant bridges beside existing `worker_id`, `validator_id`, and `actor_id` fields
+- Built-in role catalog for operators, workers, validators, reviewers, observers, admins, intent operators, and workflow architects
+- Patch Panel registry metadata, exact discovery APIs, archive/supersede lifecycle, and draft metadata updates
+- Governed Patch Panel proposal lifecycle with validation, approval, rejection, and append-only review history
+- Structured `/genesis` intent APIs for registry discovery, card launch, and proposal submission without agent-specific runtime primitives
+- Worker SDK support for optional `X-Ghostmesh-Participant` while preserving worker lease identity
+
 Docker Compose startup has been verified with the API and Postgres containers running locally.
 
 ## Documentation
@@ -119,6 +130,9 @@ Docker Compose startup has been verified with the API and Postgres containers ru
 - [Deployment](docs/deployment.md)
 - [Example workflows](docs/workflows.md)
 - [Human to AI operating path](docs/ai-adoption-path.md)
+- [Participant authority architecture](docs/participant_authority_architecture.md)
+- [Patch Panel registry architecture](docs/patch_panel_registry_architecture.md)
+- [Intent-driven genesis MVP](docs/intent_driven_genesis_mvp.md)
 - [Agent skills](docs/skills): executable playbooks for workers, validators, boundary adapters, and workflow architects.
 
 ## Developer Setup

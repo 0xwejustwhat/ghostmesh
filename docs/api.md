@@ -27,6 +27,23 @@ OpenAPI is available at `/docs` when the FastAPI app is running.
 
 Idempotent mutation endpoints accept the `Idempotency-Key` header.
 
+## Participant Identity
+
+Protected governance endpoints accept `X-Ghostmesh-Participant`. This identifies the
+participant being authorized. It is separate from runtime fields such as `worker_id`,
+`validator_id`, and `actor_id`, which remain lease/event identity fields for MVP
+compatibility.
+
+## Participants And Permissions
+
+Local/dev participant management:
+
+- `GET /participants`
+- `POST /participants`
+- `POST /participants/{participant_id}/roles`
+- `POST /participants/{participant_id}/permissions`
+- `GET /participants/{participant_id}/permissions`
+
 ## Workers And Validators
 
 - `GET /workers/leases/{lease_id}/context`
@@ -56,6 +73,38 @@ Source boundaries map authorized external events into Cards and deduplicate with
 - `POST /mutations`
 - `POST /mutations/{mutation_id}/validate`
 - `POST /mutations/{mutation_id}/promote`
+
+## Patch Panel Registry
+
+- `GET /registry/patchpanels`
+- `POST /registry/patchpanels`
+- `GET /registry/patchpanels/{entry_id}`
+- `PATCH /registry/patchpanels/{entry_id}`
+- `POST /registry/patchpanels/{entry_id}/archive`
+- `POST /registry/patchpanels/{entry_id}/supersede`
+
+Search supports exact filters such as `tag`, `input_type`, `output_type`,
+`required_tool`, `risk_level`, and `owner_participant_id`.
+
+## Patch Panel Proposals
+
+- `POST /registry/patchpanels/proposals`
+- `GET /registry/patchpanels/proposals/{proposal_id}`
+- `POST /registry/patchpanels/proposals/{proposal_id}/approve`
+- `POST /registry/patchpanels/proposals/{proposal_id}/reject`
+
+Valid proposals enter review without publishing. Approval requires separate promotion
+and publishing authority.
+
+## Intent-Driven Genesis
+
+- `POST /genesis/intents`
+- `GET /genesis/intents/{intent_id}`
+- `POST /genesis/intents/{intent_id}/launch`
+- `POST /genesis/intents/{intent_id}/propose`
+
+Genesis accepts structured intent only. Free-form prompt parsing belongs outside the
+runtime.
 
 ## Operator Views
 

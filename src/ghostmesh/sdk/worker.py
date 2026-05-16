@@ -23,11 +23,13 @@ class WorkerClient:
         worker_id: str,
         timeout: float = 10.0,
         auth_token: str | None = None,
+        participant_id: str | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.worker_id = worker_id
         self.timeout = timeout
         self.auth_token = auth_token
+        self.participant_id = participant_id
 
     def claim(
         self,
@@ -136,6 +138,8 @@ class WorkerClient:
         headers = _idempotency_headers(idempotency_key)
         if self.auth_token:
             headers["Authorization"] = f"Bearer {self.auth_token}"
+        if self.participant_id:
+            headers["X-Ghostmesh-Participant"] = self.participant_id
         return headers
 
 

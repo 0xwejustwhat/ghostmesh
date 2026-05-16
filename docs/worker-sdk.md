@@ -6,7 +6,11 @@ The Python SDK exposes pipe-aware worker operations. It deliberately does not ex
 from ghostmesh.artifacts import LocalGitArtifactStore
 from ghostmesh.sdk import WorkerClient
 
-client = WorkerClient("http://localhost:8000", worker_id="worker-1")
+client = WorkerClient(
+    "http://localhost:8000",
+    worker_id="worker-1",
+    participant_id="participant-worker-1",
+)
 lease = client.claim(input_pipe="worker_input")
 context = client.context(lease_id=lease["id"])
 
@@ -37,3 +41,7 @@ Workers should:
 - Fail explicitly when required context or permissions are missing.
 
 Workers must not route Cards, mutate Patch Panels, execute production egress, or bypass validators.
+
+`worker_id` remains the lease identity sent in claim/release payloads. `participant_id`
+is optional and is sent as `X-Ghostmesh-Participant` for authorization when the
+governance layer is enabled.

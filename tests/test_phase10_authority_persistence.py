@@ -5,6 +5,8 @@ from uuid import uuid4
 
 from sqlalchemy import create_engine, inspect, select
 
+from ghostmesh.auth import AuthorizationService, PostgresAuthorizationRepository
+from ghostmesh.domain import PermissionName, Scope, ScopeType
 from ghostmesh.persistence.tables import (
     authorization_audit_events,
     card_events,
@@ -165,3 +167,24 @@ def test_authority_metadata_matches_expected_table_names() -> None:
         "authorization_audit_events",
         "patch_panel_registry_entries",
     }.issubset(table_names)
+
+
+def test_postgres_authorization_repository_reads_seeded_grants() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    metadata.create_all(engine)
+    with engine.begin() as connection:
+        participant, _role = seed_authority_fixture(connection)
+
+    service = AuthorizationService(PostgresAuthorizationRepository(engine))
+    decision = service.authorize(
+        participant_id=participant.id,
+        permission=PermissionName.CARD_CLAIM,
+        scope=Scope(type=ScopeType.BUCKET, id="fixture-bucket"),
+        context={"workflow_id": "fixture-workflow"},
+    )
+
+    with engine.connect() as connection:
+        audit_rows = connection.execute(select(authorization_audit_events.c.allowed)).all()
+
+    assert decision.allowed is True
+    assert audit_rows[-1].allowed is True

@@ -137,3 +137,35 @@ def test_worker_client_uploads_bytes_through_artifact_store(tmp_path) -> None:
     )
     assert artifact.storage_ref.startswith("file://")
     assert artifact.metadata == {"role": "draft"}
+
+
+def test_worker_client_can_send_participant_header_without_changing_worker_id(monkeypatch) -> None:
+    requests: list[tuple[dict[str, object], dict[str, str]]] = []
+
+    def fake_post(
+        url: str,
+        *,
+        json: dict[str, object],
+        headers: dict[str, str],
+        timeout: float,
+    ) -> httpx.Response:
+        requests.append((json, headers))
+        return httpx.Response(
+            200,
+            json={"id": "lease-1", "input_pipe": json["input_pipe"]},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    client = WorkerClient(
+        "http://mesh.local",
+        worker_id="lease-worker",
+        participant_id="participant-worker",
+    )
+
+    client.claim(input_pipe="worker_input")
+
+    assert requests[0] == (
+        {"input_pipe": "worker_input", "worker_id": "lease-worker", "lease_seconds": 300},
+        {"X-Ghostmesh-Participant": "participant-worker"},
+    )
