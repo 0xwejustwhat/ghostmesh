@@ -119,7 +119,7 @@ Docker Compose startup has been verified with the API and Postgres containers ru
 - [Deployment](docs/deployment.md)
 - [Example workflows](docs/workflows.md)
 - [Human to AI operating path](docs/ai-adoption-path.md)
-- [Agent skills](docs/skills)
+- [Agent skills](docs/skills): executable playbooks for workers, validators, boundary adapters, and workflow architects.
 
 ## Developer Setup
 

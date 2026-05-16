@@ -353,14 +353,14 @@ Prepare the open-source core for contributors and enterprise evaluators.
 - Add Docker image build instructions and optional Helm chart stub.
 - Add CI checks for Poetry install, tests, migrations, and linting.
 - Document the expected path from human production to AI shadow to supervised AI production to exception-based human oversight.
-- Add agent-facing operational templates in `/docs/skills` so AI workers, validators, boundary adapters, and workflow architect agents can participate without mistaking Ghost Mesh for an agent orchestrator.
+- Add operational agent skill files for Ghost Mesh participants. Each skill file must include both behavioral constraints and executable procedures: required runtime-provided variables, available MCP tools, REST API fallback endpoints, required request and response shapes, idempotency key rules, lease handling, artifact submission formats, failure artifact formats, examples of successful and failed execution, and explicit forbidden actions. The skills must be written so an agent can load the file and perform its assigned Ghost Mesh role without needing architectural interpretation.
 
 ### Agent Skills Documentation
 
-- Add `worker-skills.md` for regular Worker Nodes. It must teach agents that Ghost Mesh is not their orchestrator; workers are pipe-aware rather than graph-aware; workers only claim Cards from assigned input pipes and submit artifacts to assigned output pipes; workers must not route Cards, mutate workflows, publish externally, or bypass validators; workers must read the Card, follow the Acceptance Contract, produce the requested artifact, include evidence or proof, and fail explicitly when instructions, permissions, or required context are missing.
-- Add `boundary-adapter-skills.md` for Source and Sink Nodes. It must teach agents that Source Nodes only translate authorized external events into valid Cards; Sink Nodes only translate approved Cards or artifacts into external side effects; Source and Sink nodes are thin boundary adapters rather than workflow brains; they must enforce dedupe and idempotency keys; they must not perform production work unless explicitly modeled as a Worker Node; and they must return external references or durable proofs when pushing to outside systems.
-- Add `validator-skills.md` for AI or human-assisted Validator Nodes. It should focus validators on the Acceptance Contract; require structured accept/reject/score/reason output; avoid judging downstream business performance; and route only when explicitly modeled as a routing validator or Junction.
-- Add `workflow-architect-skills.md` for Hermes-style workflow architect agents. It should teach agents to create Patch Panels, buckets, routes, contracts, and node specs; keep workflow logic out of workers; propose mutations as Cards; and send mutations through shadow and promotion gates.
+- Add `docs/skills/worker/SKILL.md` plus supporting API, MCP, examples, and failure-mode docs for regular Worker Nodes. It must teach agents that Ghost Mesh is not their orchestrator; workers are pipe-aware rather than graph-aware; workers only claim Cards from assigned input pipes and submit artifacts to assigned output pipes; workers must not route Cards, mutate workflows, publish externally, or bypass validators; and workers must include exact claim, context, artifact upload, submit, renew, release, and failure procedures.
+- Add `docs/skills/boundary-adapter/SKILL.md` plus Source, Sink, API, MCP, idempotency, and examples docs. It must teach agents that Source Nodes only translate authorized external events into valid Cards; Sink Nodes only translate approved Cards or artifacts into external side effects; Source and Sink nodes are thin boundary adapters rather than workflow brains; they must enforce dedupe and idempotency keys; and they must include exact ingress, egress, external reference, and failure procedures.
+- Add `docs/skills/validator/SKILL.md` plus API, MCP, decision-shape, and example docs for AI or human-assisted Validator Nodes. It should focus validators on the Acceptance Contract; require structured accept/reject/score/reason output; avoid judging downstream business performance; and include exact review queue, inspection, decision, and failure procedures.
+- Add `docs/skills/workflow-architect/SKILL.md` plus Patch Panel generation, mutation Card, shadow lane, promotion, and example docs for Hermes-style workflow architect agents. It should teach agents to create Patch Panels, buckets, routes, contracts, and node specs; keep workflow logic out of workers; propose mutations as Cards; and send mutations through shadow and promotion gates.
 
 ### Acceptance Criteria
 
@@ -369,7 +369,8 @@ Prepare the open-source core for contributors and enterprise evaluators.
 - CI validates the documented contributor workflow.
 - Documentation clearly distinguishes Ghost Mesh from agent orchestration frameworks.
 - Documentation clearly states that Poetry is the dependency and packaging workflow.
-- Agent-facing skill documentation exists for Worker, Source/Sink boundary adapter, Validator, and Workflow Architect roles.
+- Operational agent skill documentation exists for Worker, Source/Sink boundary adapter, Validator, and Workflow Architect roles.
+- An agent using only the relevant skill file and assigned credentials can claim, process, submit, validate, source, or sink a test Card in the local canonical workflow.
 
 ## Test Strategy
 
