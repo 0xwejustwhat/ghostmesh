@@ -306,7 +306,7 @@ class InMemoryCardRuntime:
             return _typed(cached, Card)
 
         card = self._get_card(card_id)
-        patch_panel = self._single_patch_panel()
+        patch_panel = self._get_patch_panel_for_card(card)
         ensure_bucket_exists(patch_panel, to_bucket)
         moved = card.model_copy(update={"current_bucket": to_bucket})
         self._cards[card.id] = moved

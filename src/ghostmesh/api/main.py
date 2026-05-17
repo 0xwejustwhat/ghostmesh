@@ -44,6 +44,7 @@ from ghostmesh.domain import (
 )
 from ghostmesh.genesis import GenesisService
 from ghostmesh.logging import configure_logging
+from ghostmesh.mcp import mount_mcp_endpoints
 from ghostmesh.nodes import NodeExecutor, ValidatorExecutionInput, WorkerExecutionInput
 from ghostmesh.observability import ObservabilityService
 from ghostmesh.registry import (
@@ -283,6 +284,7 @@ def create_app(
     app.state.genesis_service = GenesisService(runtime=runtime, registry=registry)
     app.state.authorization_enabled = settings.authorization_enabled
     app.state.authorization_service = authorization_service
+    mount_mcp_endpoints(app)
 
     @app.exception_handler(NotFoundError)
     def handle_not_found(_request: object, exc: NotFoundError) -> JSONResponse:

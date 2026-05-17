@@ -17,7 +17,11 @@ psycopg = { version = "^3.2.4", extras = ["binary"] }
 pyyaml = "^6.0.2"
 sqlalchemy = "^2.0.38"
 structlog = "^25.1.0"
-uvicorn = { version = "^0.34.0", extras = ["standard"] }
+uvicorn = { version = "^0.35.0", extras = ["standard"] }
+fastmcp = "~=3.3.1"
+
+[tool.poetry.scripts]
+ghostmesh = "ghostmesh.cli:main"
 
 [tool.poetry.group.dev.dependencies]
 httpx = "^0.28.1"

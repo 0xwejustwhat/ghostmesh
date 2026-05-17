@@ -16,6 +16,12 @@
 - DO NOT publish Patch Panels from Genesis or Registry helper code. Publication belongs to an authorized Sink node.
 - DO NOT add side-channel proposal stores. A proposed Patch Panel is a Card in `system_pp_approval`.
 
+## Protocol Symmetry (REST & MCP)
+
+- Ghost Mesh treats REST API paths and MCP tool registration hooks as identical protocol gateways. They run over identical domain models, data engines, and compliance policies.
+- DO NOT write specialized data persistence overrides inside tool routers. Tool controllers invoke core `runtime`, `NodeExecutor`, or boundary adapter primitives directly.
+- MCP tools must not bypass participant authorization, Card movement rules, validation contracts, sink constraints, or registry publication safeguards.
+
 ## Vocabulary Anchors
 
 - Patch Panel: declarative workflow graph containing nodes, buckets, pipes, edges, and contracts.
