@@ -9,16 +9,12 @@ from pydantic import BaseModel, Field
 
 from ghostmesh.auth import (
     AuthorizationService,
-    InMemoryAuthorizationRepository,
-    PostgresAuthorizationRepository,
     get_role_template,
-    seed_development_authority,
 )
 from ghostmesh.auth.dependencies import authorize_request
+from ghostmesh.bootstrap import initialize_system
 from ghostmesh.boundaries import BoundaryAdapterService, BoundarySinkRequest, BoundarySourceRequest
 from ghostmesh.config import Settings, get_settings
-from ghostmesh.db import create_database_engine
-from ghostmesh.defaults.bootstrap import SystemWorkflowBootstrapper
 from ghostmesh.domain import (
     ArtifactReference,
     AuditAction,
@@ -47,16 +43,9 @@ from ghostmesh.logging import configure_logging
 from ghostmesh.mcp import mount_mcp_endpoints
 from ghostmesh.nodes import NodeExecutor, ValidatorExecutionInput, WorkerExecutionInput
 from ghostmesh.observability import ObservabilityService
-from ghostmesh.registry import (
-    InMemoryPatchPanelRegistry,
-    PatchPanelRegistry,
-    PatchPanelRegistrySearch,
-    PostgresPatchPanelRegistry,
-)
+from ghostmesh.registry import PatchPanelRegistry, PatchPanelRegistrySearch
 from ghostmesh.runtime import (
     CardRuntime,
-    InMemoryCardRuntime,
-    PostgresCardRuntime,
     ShadowPolicy,
     ShadowService,
 )
@@ -228,33 +217,6 @@ class ProposeGenesisIntentRequest(BaseModel):
     base_version: str | None = None
 
 
-def _create_runtime(settings: Settings) -> CardRuntime:
-    if settings.runtime_backend == "postgres":
-        return PostgresCardRuntime(create_database_engine(settings.database_url))
-    return InMemoryCardRuntime()
-
-
-def _create_registry(settings: Settings) -> PatchPanelRegistry:
-    if settings.registry_backend == "postgres":
-        return PostgresPatchPanelRegistry(create_database_engine(settings.database_url))
-    return InMemoryPatchPanelRegistry()
-
-
-def _create_authorization_service(settings: Settings) -> AuthorizationService:
-    if settings.authorization_repository == "postgres":
-        return AuthorizationService(
-            PostgresAuthorizationRepository(create_database_engine(settings.database_url))
-        )
-
-    repository = InMemoryAuthorizationRepository()
-    if settings.development_authority_enabled:
-        repository = seed_development_authority(
-            participant_id=settings.development_participant_id,
-            scope=Scope.development_global(),
-        )
-    return AuthorizationService(repository)
-
-
 def create_app(
     settings: Settings | None = None,
     runtime: CardRuntime | None = None,
@@ -263,14 +225,15 @@ def create_app(
 ) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
-    runtime = runtime or _create_runtime(settings)
-    authorization_service = authorization_service or _create_authorization_service(settings)
-    registry = registry or _create_registry(settings)
-    bootstrap_results = SystemWorkflowBootstrapper(
+    initialized = initialize_system(
+        settings=settings,
         runtime=runtime,
         registry=registry,
-        patch_panel_paths=settings.system_patch_panel_paths,
-    ).bootstrap()
+        auth_service=authorization_service,
+    )
+    runtime = initialized.runtime
+    registry = initialized.registry
+    authorization_service = initialized.authorization_service
 
     app = FastAPI(
         title="Ghost Mesh",
@@ -280,7 +243,8 @@ def create_app(
     app.state.runtime = runtime
     app.state.shadow_service = ShadowService(runtime)
     app.state.registry = registry
-    app.state.system_bootstrap_results = bootstrap_results
+    app.state.system_bootstrap_results = initialized.bootstrap_results
+    app.state.root_participant_id = initialized.root_participant_id
     app.state.genesis_service = GenesisService(runtime=runtime, registry=registry)
     app.state.authorization_enabled = settings.authorization_enabled
     app.state.authorization_service = authorization_service
@@ -927,7 +891,7 @@ def create_app(
             participant_id=validator_id,
             context={"patch_panel_id": request.patch_panel_id, "validator_id": validator_id},
         )
-        executor = _executor(runtime, registry, request.patch_panel_id)
+        executor = _executor(runtime, registry, authorization_service, request.patch_panel_id)
         return executor.execute_validator(
             ValidatorExecutionInput(
                 card_id=card_id,
@@ -952,7 +916,7 @@ def create_app(
             Scope(type=ScopeType.PATCH_PANEL, id=request.patch_panel_id),
             context={"patch_panel_id": request.patch_panel_id, "source_id": request.source_id},
         )
-        executor = _executor(runtime, registry, request.patch_panel_id)
+        executor = _executor(runtime, registry, authorization_service, request.patch_panel_id)
         return executor.execute_source(
             source_id=request.source_id,
             payload=request.payload,
@@ -973,7 +937,7 @@ def create_app(
             participant_id=request.worker_id,
             context={"patch_panel_id": request.patch_panel_id, "worker_id": request.worker_id},
         )
-        executor = _executor(runtime, registry, request.patch_panel_id)
+        executor = _executor(runtime, registry, authorization_service, request.patch_panel_id)
         return executor.execute_worker(
             WorkerExecutionInput(
                 input_pipe=request.input_pipe,
@@ -1001,7 +965,7 @@ def create_app(
                 "validator_id": request.validator_id,
             },
         )
-        executor = _executor(runtime, registry, request.patch_panel_id)
+        executor = _executor(runtime, registry, authorization_service, request.patch_panel_id)
         return executor.execute_validator(
             ValidatorExecutionInput(
                 card_id=request.card_id,
@@ -1027,7 +991,7 @@ def create_app(
             Scope(type=ScopeType.PATCH_PANEL, id=request.patch_panel_id),
             context={"patch_panel_id": request.patch_panel_id, "sink_id": request.sink_id},
         )
-        executor = _executor(runtime, registry, request.patch_panel_id)
+        executor = _executor(runtime, registry, authorization_service, request.patch_panel_id)
         result = executor.execute_sink(
             card_id=request.card_id,
             sink_id=request.sink_id,
@@ -1183,12 +1147,14 @@ app = create_app()
 def _executor(
     runtime: CardRuntime,
     registry: PatchPanelRegistry,
+    authorization_service: AuthorizationService,
     patch_panel_id: str,
 ) -> NodeExecutor:
     return NodeExecutor(
         patch_panel=_patch_panel(runtime, patch_panel_id),
         runtime=runtime,
         registry=registry,
+        authorization_repository=authorization_service.repository,
     )
 
 

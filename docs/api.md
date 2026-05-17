@@ -3,7 +3,7 @@
 Run locally with:
 
 ```bash
-poetry run uvicorn ghostmesh.api.main:app --reload
+poetry run uvicorn ghostmesh.api.main:app --host 127.0.0.1 --reload
 ```
 
 OpenAPI is available at `/docs` when the FastAPI app is running.
@@ -33,6 +33,10 @@ Protected governance endpoints accept `X-Ghostmesh-Participant`. This identifies
 participant being authorized. It is separate from runtime fields such as `worker_id`,
 `validator_id`, and `actor_id`, which remain lease/event identity fields for MVP
 compatibility.
+
+Plain participant headers are intended for loopback/local development only. Local
+servers should bind to `127.0.0.1`, and non-local deployments must put authenticated
+identity infrastructure in front of this header boundary.
 
 ## Participants And Permissions
 

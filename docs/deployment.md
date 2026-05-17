@@ -6,10 +6,28 @@
 poetry install
 poetry run ruff check .
 poetry run pytest
-poetry run uvicorn ghostmesh.api.main:app --reload
+poetry run uvicorn ghostmesh.api.main:app --host 127.0.0.1 --reload
 ```
 
 Poetry is the dependency and packaging workflow for this repository.
+Local REST/MCP traffic uses plain `X-Ghostmesh-Participant` identity during the MVP,
+so local development servers must bind to loopback. Do not run the local stack on
+`0.0.0.0` unless an authenticated reverse proxy owns participant identity.
+
+## Local MCP Stdio
+
+```bash
+poetry run ghostmesh mcp-server
+```
+
+The stdio server runs the same shared system initializer as FastAPI startup. It
+loads default system Patch Panels, including `system_pp_approval` and
+`system_agent_registration`, and seeds the root operator participant before tool
+calls are accepted. Override the default root id with:
+
+```bash
+export GHOSTMESH_ROOT_PARTICIPANT_ID=root-operator
+```
 
 ## Docker Compose
 
@@ -21,13 +39,15 @@ curl http://localhost:8000/cards
 docker compose exec -T postgres pg_isready -U ghostmesh -d ghostmesh
 ```
 
-The Compose stack starts Postgres, runs Alembic migrations, and serves the FastAPI app with the Postgres runtime backend.
+The Compose stack starts Postgres, runs Alembic migrations, and serves the FastAPI
+app with the Postgres runtime backend. Host port publishing is constrained to
+`127.0.0.1`.
 
 ## Docker Image
 
 ```bash
 docker build -t ghostmesh:local .
-docker run --rm -p 8000:8000 \
+docker run --rm -p 127.0.0.1:8000:8000 \
   -e GHOSTMESH_RUNTIME_BACKEND=memory \
   ghostmesh:local
 ```

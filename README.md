@@ -70,7 +70,7 @@ poetry run pytest
 Run the API locally:
 
 ```bash
-poetry run uvicorn ghostmesh.api.main:app --reload
+poetry run uvicorn ghostmesh.api.main:app --host 127.0.0.1 --reload
 ```
 
 ## Comprehensive Documentation Index

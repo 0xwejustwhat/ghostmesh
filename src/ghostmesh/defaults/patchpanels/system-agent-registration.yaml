@@ -1,0 +1,116 @@
+id: system_agent_registration
+version: "1.0.0"
+description: System workflow for governed participant onboarding and role provisioning.
+metadata:
+  registry:
+    name: System Agent Registration
+    description: Validates participant onboarding payloads, routes administrative approval, and provisions authorized identities.
+    tags:
+      - system
+      - governance
+      - participant-onboarding
+    input_types:
+      - participant_onboarding_request
+    output_types:
+      - participant_authority_profile
+    required_permissions:
+      - validation:submit
+      - sink:execute
+      - participant:manage
+      - permission:grant
+    risk_level: high
+    status: published
+
+buckets:
+  - id: registration_compliance
+    description: Participant onboarding requests awaiting automated compliance checks.
+  - id: registration_admin_review
+    description: Compliant onboarding requests awaiting administrator approval.
+  - id: authority_provisioning
+    description: Approved onboarding requests ready for authority provisioning.
+  - id: registration_rejected
+    description: Onboarding requests rejected by compliance or administrative review.
+
+nodes:
+  - id: registration_source
+    type: source
+    output_pipes:
+      - registration_submitted
+  - id: registration_compliance_validator
+    type: validator
+    validator_kind: routing
+    input_pipes:
+      - compliance_input
+    output_pipes:
+      - registration_compliant
+      - registration_noncompliant
+    config:
+      validation_handler: participant_onboarding_compliance
+      valid_exit: registration_compliant
+      invalid_exit: registration_noncompliant
+      accept_exits:
+        - registration_compliant
+  - id: registration_admin_reviewer
+    type: validator
+    validator_kind: routing
+    input_pipes:
+      - admin_review_input
+    output_pipes:
+      - registration_approved
+      - registration_rejected
+    config:
+      accept_exits:
+        - registration_approved
+  - id: authority_provisioner_sink
+    type: sink
+    input_pipes:
+      - provisioning_input
+    config:
+      egress_contract:
+        type: authority_provisioning
+        external_reference_required: false
+
+pipe_bindings:
+  registration_submitted:
+    node: registration_source
+    direction: output
+    bucket: registration_compliance
+  compliance_input:
+    node: registration_compliance_validator
+    direction: input
+    bucket: registration_compliance
+  registration_compliant:
+    node: registration_compliance_validator
+    direction: output
+    bucket: registration_admin_review
+  registration_noncompliant:
+    node: registration_compliance_validator
+    direction: output
+    bucket: registration_rejected
+  admin_review_input:
+    node: registration_admin_reviewer
+    direction: input
+    bucket: registration_admin_review
+  registration_approved:
+    node: registration_admin_reviewer
+    direction: output
+    bucket: authority_provisioning
+  registration_rejected:
+    node: registration_admin_reviewer
+    direction: output
+    bucket: registration_rejected
+  provisioning_input:
+    node: authority_provisioner_sink
+    direction: input
+    bucket: authority_provisioning
+
+edges:
+  - from: registration_source
+    to: registration_compliance_validator
+    on: card_created
+  - from: registration_compliance_validator
+    to: registration_admin_reviewer
+    on: registration_compliant
+  - from: registration_admin_reviewer
+    to: authority_provisioner_sink
+    on: registration_approved

@@ -6,16 +6,21 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from ghostmesh.auth import AuthorizationRepository
+from ghostmesh.bootstrap import ensure_builtin_role_assignment
 from ghostmesh.domain import (
     ArtifactReference,
     Card,
     CardEvent,
     NodeDefinition,
     NodeType,
+    Participant,
     PatchPanel,
     PatchPanelRegistryEntry,
     PatchPanelRegistryMetadata,
     PatchPanelRegistryStatus,
+    RoleName,
+    Scope,
 )
 from ghostmesh.patchpanel import PatchPanelValidator
 from ghostmesh.patchpanel.errors import PatchPanelValidationError
@@ -44,6 +49,17 @@ class ValidatorExecutionInput(BaseModel):
     idempotency_key: str | None = None
 
 
+class OnboardingRoleAssignmentPayload(BaseModel):
+    role_name: RoleName
+    scope: Scope
+    assigned_by: str | None = None
+
+
+class ParticipantOnboardingPayload(BaseModel):
+    participant: Participant
+    role_assignments: list[OnboardingRoleAssignmentPayload] = Field(min_length=1)
+
+
 @dataclass(frozen=True)
 class SinkResult:
     event: CardEvent
@@ -59,10 +75,12 @@ class NodeExecutor:
         patch_panel: PatchPanel,
         runtime: CardRuntime,
         registry: PatchPanelRegistry | None = None,
+        authorization_repository: AuthorizationRepository | None = None,
     ) -> None:
         self.patch_panel = patch_panel
         self.runtime = runtime
         self.registry = registry
+        self.authorization_repository = authorization_repository
 
     def execute_source(
         self,
@@ -121,6 +139,8 @@ class NodeExecutor:
         node = self._node(request.validator_id, NodeType.VALIDATOR)
         if node.config.get("validation_handler") == "patch_panel_topology":
             request = self._topology_validation_request(node, request)
+        if node.config.get("validation_handler") == "participant_onboarding_compliance":
+            request = self._participant_onboarding_request(node, request)
         selected_exit = request.selected_exit
         if selected_exit is None and self._requires_selected_exit(node):
             raise InvalidOperationError(
@@ -243,6 +263,8 @@ class NodeExecutor:
         external_reference: str | None,
     ) -> str | None:
         contract = node.config.get("egress_contract")
+        if node.id == "authority_provisioner_sink":
+            return self._execute_authority_provisioning_sink(node, card, external_reference)
         if not isinstance(contract, dict) or contract.get("type") != "registry_publication":
             return external_reference
         if self.registry is None:
@@ -300,6 +322,91 @@ class NodeExecutor:
         if not topology_validated or not governance_approved:
             raise ConflictError(
                 "registry publication requires topology validation and governance approval history"
+            )
+
+    def _participant_onboarding_request(
+        self,
+        node: NodeDefinition,
+        request: ValidatorExecutionInput,
+    ) -> ValidatorExecutionInput:
+        if request.accepted is not None or request.selected_exit is not None:
+            return request
+
+        card = self.runtime.get_card(request.card_id)
+        valid_exit = _configured_exit(node, "valid_exit")
+        invalid_exit = _configured_exit(node, "invalid_exit")
+        try:
+            payload = ParticipantOnboardingPayload.model_validate(card.payload)
+        except ValueError as exc:
+            return request.model_copy(
+                update={
+                    "accepted": False,
+                    "selected_exit": invalid_exit,
+                    "reason": str(exc),
+                    "payload": {
+                        **request.payload,
+                        "validation_handler": "participant_onboarding_compliance",
+                        "errors": [str(exc)],
+                    },
+                }
+            )
+
+        return request.model_copy(
+            update={
+                "accepted": True,
+                "selected_exit": valid_exit,
+                "reason": request.reason or "Participant onboarding payload is compliant",
+                "payload": {
+                    **request.payload,
+                    "validation_handler": "participant_onboarding_compliance",
+                    "participant_id": payload.participant.id,
+                    "role_assignment_count": len(payload.role_assignments),
+                },
+            }
+        )
+
+    def _execute_authority_provisioning_sink(
+        self,
+        node: NodeDefinition,
+        card: Card,
+        external_reference: str | None,
+    ) -> str | None:
+        if self.authorization_repository is None:
+            raise InvalidOperationError(
+                "Authorization repository unavailable for system provisioning"
+            )
+        self._ensure_authority_provisioning_history(card)
+        payload = ParticipantOnboardingPayload.model_validate(card.payload)
+        self.authorization_repository.upsert_participant(payload.participant)
+        for assignment in payload.role_assignments:
+            ensure_builtin_role_assignment(
+                self.authorization_repository,
+                participant_id=payload.participant.id,
+                role_name=assignment.role_name,
+                scope=assignment.scope,
+                assigned_by=assignment.assigned_by,
+            )
+        return external_reference or payload.participant.id
+
+    def _ensure_authority_provisioning_history(self, card: Card) -> None:
+        history = self.runtime.card_history(card.id)
+        compliance_validated = any(
+            event.event_type == "card_validated"
+            and event.actor_id == "registration_compliance_validator"
+            and event.payload.get("accepted") is True
+            and event.payload.get("output_pipe") == "registration_compliant"
+            for event in history
+        )
+        admin_approved = any(
+            event.event_type == "card_validated"
+            and event.actor_id == "registration_admin_reviewer"
+            and event.payload.get("accepted") is True
+            and event.payload.get("output_pipe") == "registration_approved"
+            for event in history
+        )
+        if not compliance_validated or not admin_approved:
+            raise ConflictError(
+                "authority provisioning requires compliance validation and admin approval history"
             )
 
     def _node(self, node_id: str, expected_type: NodeType) -> NodeDefinition:

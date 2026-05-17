@@ -39,3 +39,21 @@
 - `src/ghostmesh/registry`: discoverability and publication index. It must not own proposal lifecycle state.
 - `src/ghostmesh/genesis`: structured intent ingress and registry discovery. It may create proposal Cards, but it must not validate, approve, reject, or publish them.
 - `src/ghostmesh/nodes`: node execution adapters over runtime primitives. System workflow behavior belongs here when it is still generic node behavior.
+
+## 5. Participant Neutrality
+
+- Human, agent, script, service, and integration identities are all `Participant` records.
+- DO NOT grant authority based on interface type, model type, or caller transport.
+- Authorization must flow through participant id, permission, scope, and active role or grant state.
+
+## 6. Shared Bootstrapping
+
+- FastAPI startup and `ghostmesh mcp-server` stdio startup must use the same shared system initializer.
+- The initializer seeds system Patch Panels and the root operator participant idempotently.
+- DO NOT add one-off bootstrap logic to protocol routers, MCP tools, or public API endpoints.
+
+## 7. Graph-Native Onboarding
+
+- Participant expansion belongs in `system_agent_registration` as Cards, validators, and an authorized sink.
+- DO NOT create custom onboarding stores, procedural approval tables, or side-channel participant lifecycle managers.
+- The authority provisioner sink may write participants and role grants only after declared validation and admin-review history exists on the Card.

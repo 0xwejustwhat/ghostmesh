@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from starlette.routing import Mount
@@ -180,15 +181,56 @@ async def test_mcp_authorization_blocks_anonymous_boundary_call() -> None:
         )
 
 
+@pytest.mark.anyio
+async def test_mcp_root_operator_clears_authorization_out_of_the_box() -> None:
+    runtime = InMemoryCardRuntime()
+    create_app(
+        settings=Settings(authorization_enabled=True),
+        runtime=runtime,
+        registry=InMemoryPatchPanelRegistry(),
+    )
+    patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
+    runtime.register_patch_panel(patch_panel)
+    card = runtime.create_card(patch_panel_id="hello_world", payload={"title": "Root MCP"})
+
+    content = await mcp.call_tool(
+        "ghostmesh.claim_card",
+        {
+            "worker_id": "root-operator",
+            "input_pipe": "worker_input",
+        },
+    )
+    lease = _json_result(content)
+
+    assert lease["card_id"] == str(card.id)
+
+
 def test_cli_mcp_server_entrypoint_runs_stdio(monkeypatch: pytest.MonkeyPatch) -> None:
     from ghostmesh import cli
 
     called = {}
 
+    def fake_initialize_system(settings: object) -> SimpleNamespace:
+        called["settings"] = settings
+        return SimpleNamespace(
+            runtime=object(),
+            registry=object(),
+            authorization_service=SimpleNamespace(),
+            bootstrap_results=[],
+            root_participant_id="root-operator",
+        )
+
+    def fake_bind_app(app: object) -> None:
+        called["root_participant_id"] = app.state.root_participant_id
+
     def fake_run_stdio() -> None:
         called["stdio"] = True
 
+    monkeypatch.setattr(cli, "initialize_system", fake_initialize_system)
+    monkeypatch.setattr(cli, "bind_app", fake_bind_app)
     monkeypatch.setattr(cli, "run_stdio", fake_run_stdio)
 
     assert cli.main(["mcp-server"]) == 0
-    assert called == {"stdio": True}
+    assert called["settings"] is not None
+    assert called["root_participant_id"] == "root-operator"
+    assert called["stdio"] is True

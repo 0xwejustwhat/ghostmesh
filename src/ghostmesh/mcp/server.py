@@ -136,6 +136,7 @@ async def submit_validator_decision(
         patch_panel=_patch_panel(state.runtime, patch_panel_id),
         runtime=state.runtime,
         registry=state.registry,
+        authorization_repository=state.authorization_service.repository,
     )
     event = executor.execute_validator(
         ValidatorExecutionInput(

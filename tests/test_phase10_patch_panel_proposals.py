@@ -14,6 +14,7 @@ from ghostmesh.domain import (
     PatchPanelRegistryStatus,
     PermissionGrant,
     PermissionName,
+    RoleName,
     Scope,
     ScopeType,
 )
@@ -237,10 +238,8 @@ def test_system_bootstrap_is_idempotent() -> None:
     first = create_app(settings=Settings(), runtime=runtime, registry=registry)
     second = create_app(settings=Settings(), runtime=runtime, registry=registry)
 
-    system_panels = [
-        panel for panel in runtime.list_patch_panels() if panel.id == "system_pp_approval"
-    ]
-    assert len(system_panels) == 1
+    system_panels = {panel.id: panel for panel in runtime.list_patch_panels()}
+    assert sorted(system_panels) == ["system_agent_registration", "system_pp_approval"]
     assert len(
         [
             entry
@@ -250,8 +249,50 @@ def test_system_bootstrap_is_idempotent() -> None:
             if entry.patch_panel_id == "system_pp_approval"
         ]
     ) == 1
+    assert len(
+        [
+            entry
+            for entry in registry.search(
+                PatchPanelRegistrySearch(include_archived=True, include_superseded=True)
+            )
+            if entry.patch_panel_id == "system_agent_registration"
+        ]
+    ) == 1
     assert first.state.system_bootstrap_results[0].registered_registry is True
     assert second.state.system_bootstrap_results[0].registered_registry is False
+
+
+def test_system_bootstrap_seeds_root_operator_idempotently() -> None:
+    repository = InMemoryAuthorizationRepository()
+    auth_service = AuthorizationService(repository)
+
+    first = create_app(
+        settings=Settings(root_participant_id="local-root"),
+        runtime=InMemoryCardRuntime(),
+        registry=InMemoryPatchPanelRegistry(),
+        authorization_service=auth_service,
+    )
+    create_app(
+        settings=Settings(root_participant_id="local-root"),
+        runtime=InMemoryCardRuntime(),
+        registry=InMemoryPatchPanelRegistry(),
+        authorization_service=auth_service,
+    )
+
+    assert first.state.root_participant_id == "local-root"
+    assert repository.get_participant("local-root") is not None
+    assignments = repository.list_role_assignments("local-root")
+    grants = repository.list_permission_grants("local-root")
+    assert [assignment.role_id for assignment in assignments] == [f"builtin:{RoleName.ADMIN.value}"]
+    assert {grant.permission for grant in grants} >= {
+        PermissionName.CARD_CLAIM,
+        PermissionName.CARD_SUBMIT_ARTIFACT,
+        PermissionName.VALIDATION_SUBMIT,
+        PermissionName.BOUNDARY_SOURCE_INGRESS,
+        PermissionName.BOUNDARY_SINK_EGRESS,
+    }
+    assert len(assignments) == 1
+    assert len(grants) == len({grant.permission for grant in grants})
 
 
 def test_system_bootstrap_honors_override_paths() -> None:

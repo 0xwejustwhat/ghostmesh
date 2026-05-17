@@ -35,6 +35,8 @@ class AuthorizationRepository(Protocol):
 
     def add_role_assignment(self, assignment: RoleAssignment) -> None: ...
 
+    def list_role_assignments(self, participant_id: str) -> list[RoleAssignment]: ...
+
     def add_permission_grant(self, grant: PermissionGrant) -> None: ...
 
     def list_permission_grants(self, participant_id: str) -> list[PermissionGrant]: ...
@@ -63,6 +65,14 @@ class InMemoryAuthorizationRepository:
 
     def add_role_assignment(self, assignment: RoleAssignment) -> None:
         self.role_assignments.append(assignment)
+
+    def list_role_assignments(self, participant_id: str) -> list[RoleAssignment]:
+        now = datetime.now(UTC)
+        return [
+            assignment
+            for assignment in self.role_assignments
+            if assignment.participant_id == participant_id and assignment.is_active(now)
+        ]
 
     def add_permission_grant(self, grant: PermissionGrant) -> None:
         self.permission_grants.append(grant)
@@ -175,6 +185,21 @@ class PostgresAuthorizationRepository:
                 )
             )
 
+    def list_role_assignments(self, participant_id: str) -> list[RoleAssignment]:
+        now = datetime.now(UTC)
+        with Session(self.engine) as session:
+            rows = session.execute(
+                select(participant_roles).where(
+                    participant_roles.c.participant_id == participant_id,
+                    participant_roles.c.revoked_at.is_(None),
+                )
+            ).all()
+        return [
+            _role_assignment_from_row(row._mapping)
+            for row in rows
+            if row._mapping["expires_at"] is None or row._mapping["expires_at"] > now
+        ]
+
     def add_permission_grant(self, grant: PermissionGrant) -> None:
         with Session(self.engine) as session, session.begin():
             session.execute(
@@ -268,4 +293,19 @@ def _permission_grant_from_row(row: object) -> PermissionGrant:
         created_at=data["created_at"],
         revoked_at=data["revoked_at"],
         metadata=data["grant_metadata"],
+    )
+
+
+def _role_assignment_from_row(row: object) -> RoleAssignment:
+    data = dict(row)
+    return RoleAssignment(
+        id=data["id"],
+        participant_id=data["participant_id"],
+        role_id=data["role_id"],
+        scope=Scope(type=ScopeType(data["scope_type"]), id=data["scope_id"]),
+        assigned_by=data["assigned_by"],
+        expires_at=data["expires_at"],
+        created_at=data["created_at"],
+        revoked_at=data["revoked_at"],
+        metadata=data["assignment_metadata"],
     )

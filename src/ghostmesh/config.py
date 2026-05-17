@@ -16,8 +16,10 @@ class Settings:
     authorization_repository: str = "memory"
     development_authority_enabled: bool = False
     development_participant_id: str = "dev-admin"
+    root_participant_id: str = "root-operator"
     system_patch_panel_paths: tuple[str, ...] = (
         "src/ghostmesh/defaults/patchpanels/system-pp-approval.yaml",
+        "src/ghostmesh/defaults/patchpanels/system-agent-registration.yaml",
     )
 
 
@@ -36,9 +38,13 @@ def get_settings() -> Settings:
         authorization_repository=os.getenv("GHOSTMESH_AUTHORIZATION_REPOSITORY", "memory"),
         development_authority_enabled=_env_bool("GHOSTMESH_DEVELOPMENT_AUTHORITY_ENABLED", False),
         development_participant_id=os.getenv("GHOSTMESH_DEVELOPMENT_PARTICIPANT_ID", "dev-admin"),
+        root_participant_id=os.getenv("GHOSTMESH_ROOT_PARTICIPANT_ID", "root-operator"),
         system_patch_panel_paths=_env_list(
             "GHOSTMESH_SYSTEM_PATCH_PANEL_PATHS",
-            ("src/ghostmesh/defaults/patchpanels/system-pp-approval.yaml",),
+            (
+                "src/ghostmesh/defaults/patchpanels/system-pp-approval.yaml",
+                "src/ghostmesh/defaults/patchpanels/system-agent-registration.yaml",
+            ),
         ),
     )
 

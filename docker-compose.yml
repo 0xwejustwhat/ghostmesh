@@ -8,7 +8,7 @@ services:
       LOG_LEVEL: INFO
     command: sh -c "alembic upgrade head && uvicorn ghostmesh.api.main:app --host 0.0.0.0 --port 8000"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -20,7 +20,7 @@ services:
       POSTGRES_USER: ghostmesh
       POSTGRES_PASSWORD: ghostmesh
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ghostmesh -d ghostmesh"]
       interval: 5s

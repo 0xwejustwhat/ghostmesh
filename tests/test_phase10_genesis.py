@@ -183,11 +183,14 @@ def test_genesis_proposes_candidate_when_no_existing_workflow_matches() -> None:
     assert proposal_response.json()["workflow_version"] == "system_pp_approval:1.0.0"
     assert proposal_response.json()["current_bucket"] == "topology_proposals"
     assert proposal_response.json()["payload"]["candidate_definition"]["id"] == "hello_world"
-    assert [panel.id for panel in runtime.list_patch_panels()] == ["system_pp_approval"]
+    assert sorted(panel.id for panel in runtime.list_patch_panels()) == [
+        "system_agent_registration",
+        "system_pp_approval",
+    ]
     assert [
         entry.patch_panel_id
         for entry in registry.search(PatchPanelRegistrySearch(include_archived=True))
-    ] == ["system_pp_approval"]
+    ] == ["system_pp_approval", "system_agent_registration"]
     assert repository.audit_events[-1].action == AuditAction.GENESIS_PROPOSAL_SUBMITTED
 
 
