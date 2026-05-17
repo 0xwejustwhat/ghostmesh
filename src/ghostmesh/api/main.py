@@ -18,6 +18,7 @@ from ghostmesh.auth.dependencies import authorize_request
 from ghostmesh.boundaries import BoundaryAdapterService, BoundarySinkRequest, BoundarySourceRequest
 from ghostmesh.config import Settings, get_settings
 from ghostmesh.db import create_database_engine
+from ghostmesh.defaults.bootstrap import SystemWorkflowBootstrapper
 from ghostmesh.domain import (
     ArtifactReference,
     AuditAction,
@@ -30,8 +31,6 @@ from ghostmesh.domain import (
     ParticipantStatus,
     ParticipantType,
     PatchPanel,
-    PatchPanelProposal,
-    PatchPanelProposalType,
     PatchPanelRegistryEntry,
     PatchPanelRegistryMetadata,
     PermissionGrant,
@@ -48,9 +47,7 @@ from ghostmesh.logging import configure_logging
 from ghostmesh.nodes import NodeExecutor, ValidatorExecutionInput, WorkerExecutionInput
 from ghostmesh.observability import ObservabilityService
 from ghostmesh.registry import (
-    InMemoryPatchPanelProposalStore,
     InMemoryPatchPanelRegistry,
-    PatchPanelProposalStore,
     PatchPanelRegistry,
     PatchPanelRegistrySearch,
     PostgresPatchPanelRegistry,
@@ -183,25 +180,6 @@ class SupersedeRegistryEntryRequest(BaseModel):
     superseded_by_entry_id: UUID
 
 
-class CreatePatchPanelProposalRequest(BaseModel):
-    proposal_type: PatchPanelProposalType
-    proposed_by: str
-    candidate_definition: PatchPanel
-    registry_metadata: PatchPanelRegistryMetadata
-    base_patch_panel_id: str | None = None
-    base_version: str | None = None
-
-
-class ReviewPatchPanelProposalRequest(BaseModel):
-    reviewer_id: str | None = None
-    reason: str | None = None
-
-
-class RejectPatchPanelProposalRequest(BaseModel):
-    reviewer_id: str | None = None
-    reason: str
-
-
 class CreateParticipantRequest(BaseModel):
     id: str
     type: ParticipantType
@@ -245,6 +223,8 @@ class ProposeGenesisIntentRequest(BaseModel):
     proposed_by: str
     candidate_definition: PatchPanel
     registry_metadata: PatchPanelRegistryMetadata
+    base_patch_panel_id: str | None = None
+    base_version: str | None = None
 
 
 def _create_runtime(settings: Settings) -> CardRuntime:
@@ -279,14 +259,17 @@ def create_app(
     runtime: CardRuntime | None = None,
     authorization_service: AuthorizationService | None = None,
     registry: PatchPanelRegistry | None = None,
-    proposal_store: PatchPanelProposalStore | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
     runtime = runtime or _create_runtime(settings)
     authorization_service = authorization_service or _create_authorization_service(settings)
     registry = registry or _create_registry(settings)
-    proposal_store = proposal_store or InMemoryPatchPanelProposalStore()
+    bootstrap_results = SystemWorkflowBootstrapper(
+        runtime=runtime,
+        registry=registry,
+        patch_panel_paths=settings.system_patch_panel_paths,
+    ).bootstrap()
 
     app = FastAPI(
         title="Ghost Mesh",
@@ -296,12 +279,8 @@ def create_app(
     app.state.runtime = runtime
     app.state.shadow_service = ShadowService(runtime)
     app.state.registry = registry
-    app.state.proposal_store = proposal_store
-    app.state.genesis_service = GenesisService(
-        runtime=runtime,
-        registry=registry,
-        proposal_store=proposal_store,
-    )
+    app.state.system_bootstrap_results = bootstrap_results
+    app.state.genesis_service = GenesisService(runtime=runtime, registry=registry)
     app.state.authorization_enabled = settings.authorization_enabled
     app.state.authorization_service = authorization_service
 
@@ -618,130 +597,6 @@ def create_app(
         )
         return registry.supersede(entry_id, request.superseded_by_entry_id)
 
-    @app.post("/registry/patchpanels/proposals")
-    def create_patch_panel_proposal(
-        request: CreatePatchPanelProposalRequest,
-        http_request: Request,
-    ) -> PatchPanelProposal:
-        _authorize(
-            http_request,
-            PermissionName.MUTATION_PROPOSE,
-            Scope(type=ScopeType.PATCH_PANEL, id=request.candidate_definition.id),
-            participant_id=request.proposed_by,
-            context={
-                "patch_panel_id": request.candidate_definition.id,
-                "proposal_type": request.proposal_type.value,
-            },
-        )
-        proposal = proposal_store.create(
-            proposal_type=request.proposal_type,
-            proposed_by=request.proposed_by,
-            candidate_definition=request.candidate_definition,
-            registry_metadata=request.registry_metadata,
-            base_patch_panel_id=request.base_patch_panel_id,
-            base_version=request.base_version,
-        )
-        _record_audit(
-            http_request,
-            action=AuditAction.PATCH_PANEL_PROPOSAL_SUBMITTED,
-            participant_id=_resolved_actor(http_request, request.proposed_by),
-            permission=PermissionName.MUTATION_PROPOSE,
-            scope=Scope(type=ScopeType.PATCH_PANEL, id=request.candidate_definition.id),
-            target_ref=str(proposal.id),
-            metadata={"proposal_type": request.proposal_type.value},
-        )
-        return proposal
-
-    @app.get("/registry/patchpanels/proposals/{proposal_id}")
-    def get_patch_panel_proposal(
-        proposal_id: UUID,
-        http_request: Request,
-    ) -> PatchPanelProposal:
-        proposal = proposal_store.get(proposal_id)
-        _authorize(
-            http_request,
-            PermissionName.PATCH_PANEL_DISCOVER,
-            Scope(type=ScopeType.PATCH_PANEL, id=proposal.candidate_definition.id),
-            context={"patch_panel_id": proposal.candidate_definition.id},
-        )
-        return proposal
-
-    @app.post("/registry/patchpanels/proposals/{proposal_id}/approve")
-    def approve_patch_panel_proposal(
-        proposal_id: UUID,
-        request: ReviewPatchPanelProposalRequest,
-        http_request: Request,
-    ) -> PatchPanelProposal:
-        proposal = proposal_store.get(proposal_id)
-        reviewer_id = request.reviewer_id
-        _authorize(
-            http_request,
-            PermissionName.MUTATION_PROMOTE,
-            Scope(type=ScopeType.PATCH_PANEL, id=proposal.candidate_definition.id),
-            participant_id=reviewer_id,
-            context={"proposal_id": str(proposal_id), "action": "approve"},
-        )
-        _authorize(
-            http_request,
-            PermissionName.PATCH_PANEL_PUBLISH_VERSION,
-            Scope(type=ScopeType.PATCH_PANEL, id=proposal.candidate_definition.id),
-            participant_id=reviewer_id,
-            context={"proposal_id": str(proposal_id), "action": "approve"},
-        )
-        approved = proposal_store.approve(
-            proposal_id=proposal_id,
-            reviewer_id=_resolved_actor(http_request, reviewer_id),
-            runtime=runtime,
-            registry=registry,
-            reason=request.reason,
-        )
-        _record_audit(
-            http_request,
-            action=AuditAction.PATCH_PANEL_PROPOSAL_APPROVED,
-            participant_id=_resolved_actor(http_request, reviewer_id),
-            permission=PermissionName.MUTATION_PROMOTE,
-            scope=Scope(type=ScopeType.PATCH_PANEL, id=proposal.candidate_definition.id),
-            target_ref=str(proposal_id),
-            reason=request.reason,
-            metadata={
-                "registry_entry_id": str(approved.promoted_registry_entry_id),
-                "status": approved.status.value,
-            },
-        )
-        return approved
-
-    @app.post("/registry/patchpanels/proposals/{proposal_id}/reject")
-    def reject_patch_panel_proposal(
-        proposal_id: UUID,
-        request: RejectPatchPanelProposalRequest,
-        http_request: Request,
-    ) -> PatchPanelProposal:
-        proposal = proposal_store.get(proposal_id)
-        reviewer_id = request.reviewer_id
-        _authorize(
-            http_request,
-            PermissionName.MUTATION_VALIDATE,
-            Scope(type=ScopeType.PATCH_PANEL, id=proposal.candidate_definition.id),
-            participant_id=reviewer_id,
-            context={"proposal_id": str(proposal_id), "action": "reject"},
-        )
-        rejected = proposal_store.reject(
-            proposal_id=proposal_id,
-            reviewer_id=_resolved_actor(http_request, reviewer_id),
-            reason=request.reason,
-        )
-        _record_audit(
-            http_request,
-            action=AuditAction.PATCH_PANEL_PROPOSAL_REJECTED,
-            participant_id=_resolved_actor(http_request, reviewer_id),
-            permission=PermissionName.MUTATION_VALIDATE,
-            scope=Scope(type=ScopeType.PATCH_PANEL, id=proposal.candidate_definition.id),
-            target_ref=str(proposal_id),
-            reason=request.reason,
-            metadata={"status": rejected.status.value},
-        )
-        return rejected
-
     @app.post("/genesis/intents")
     def receive_genesis_intent(
         request: GenesisIntentRequest,
@@ -867,7 +722,7 @@ def create_app(
         intent_id: UUID,
         request: ProposeGenesisIntentRequest,
         http_request: Request,
-    ) -> PatchPanelProposal:
+    ) -> Card:
         _authorize(
             http_request,
             PermissionName.MUTATION_PROPOSE,
@@ -875,11 +730,13 @@ def create_app(
             participant_id=request.proposed_by,
             context={"genesis_intent_id": str(intent_id)},
         )
-        proposal = app.state.genesis_service.propose(
+        card = app.state.genesis_service.propose(
             intent_id=intent_id,
             proposed_by=request.proposed_by,
             candidate_definition=request.candidate_definition,
             registry_metadata=request.registry_metadata,
+            base_patch_panel_id=request.base_patch_panel_id,
+            base_version=request.base_version,
         )
         _record_audit(
             http_request,
@@ -887,10 +744,10 @@ def create_app(
             participant_id=_resolved_actor(http_request, request.proposed_by),
             permission=PermissionName.MUTATION_PROPOSE,
             scope=Scope(type=ScopeType.PATCH_PANEL, id=request.candidate_definition.id),
-            target_ref=str(proposal.id),
+            target_ref=str(card.id),
             metadata={"genesis_intent_id": str(intent_id)},
         )
-        return proposal
+        return card
 
     @app.get("/cards")
     def list_cards() -> list[Card]:
@@ -1068,7 +925,7 @@ def create_app(
             participant_id=validator_id,
             context={"patch_panel_id": request.patch_panel_id, "validator_id": validator_id},
         )
-        executor = _executor(runtime, request.patch_panel_id)
+        executor = _executor(runtime, registry, request.patch_panel_id)
         return executor.execute_validator(
             ValidatorExecutionInput(
                 card_id=card_id,
@@ -1093,7 +950,7 @@ def create_app(
             Scope(type=ScopeType.PATCH_PANEL, id=request.patch_panel_id),
             context={"patch_panel_id": request.patch_panel_id, "source_id": request.source_id},
         )
-        executor = _executor(runtime, request.patch_panel_id)
+        executor = _executor(runtime, registry, request.patch_panel_id)
         return executor.execute_source(
             source_id=request.source_id,
             payload=request.payload,
@@ -1114,7 +971,7 @@ def create_app(
             participant_id=request.worker_id,
             context={"patch_panel_id": request.patch_panel_id, "worker_id": request.worker_id},
         )
-        executor = _executor(runtime, request.patch_panel_id)
+        executor = _executor(runtime, registry, request.patch_panel_id)
         return executor.execute_worker(
             WorkerExecutionInput(
                 input_pipe=request.input_pipe,
@@ -1142,7 +999,7 @@ def create_app(
                 "validator_id": request.validator_id,
             },
         )
-        executor = _executor(runtime, request.patch_panel_id)
+        executor = _executor(runtime, registry, request.patch_panel_id)
         return executor.execute_validator(
             ValidatorExecutionInput(
                 card_id=request.card_id,
@@ -1168,7 +1025,7 @@ def create_app(
             Scope(type=ScopeType.PATCH_PANEL, id=request.patch_panel_id),
             context={"patch_panel_id": request.patch_panel_id, "sink_id": request.sink_id},
         )
-        executor = _executor(runtime, request.patch_panel_id)
+        executor = _executor(runtime, registry, request.patch_panel_id)
         result = executor.execute_sink(
             card_id=request.card_id,
             sink_id=request.sink_id,
@@ -1321,8 +1178,16 @@ def create_app(
 app = create_app()
 
 
-def _executor(runtime: CardRuntime, patch_panel_id: str) -> NodeExecutor:
-    return NodeExecutor(patch_panel=_patch_panel(runtime, patch_panel_id), runtime=runtime)
+def _executor(
+    runtime: CardRuntime,
+    registry: PatchPanelRegistry,
+    patch_panel_id: str,
+) -> NodeExecutor:
+    return NodeExecutor(
+        patch_panel=_patch_panel(runtime, patch_panel_id),
+        runtime=runtime,
+        registry=registry,
+    )
 
 
 def _patch_panel(runtime: CardRuntime, patch_panel_id: str) -> PatchPanel:

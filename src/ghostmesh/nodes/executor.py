@@ -13,9 +13,15 @@ from ghostmesh.domain import (
     NodeDefinition,
     NodeType,
     PatchPanel,
+    PatchPanelRegistryEntry,
+    PatchPanelRegistryMetadata,
+    PatchPanelRegistryStatus,
 )
+from ghostmesh.patchpanel import PatchPanelValidator
+from ghostmesh.patchpanel.errors import PatchPanelValidationError
+from ghostmesh.registry import PatchPanelRegistry, PatchPanelRegistrySearch
 from ghostmesh.runtime import CardRuntime
-from ghostmesh.runtime.errors import InvalidOperationError, NotFoundError
+from ghostmesh.runtime.errors import ConflictError, InvalidOperationError, NotFoundError
 
 
 class WorkerExecutionInput(BaseModel):
@@ -47,9 +53,16 @@ class SinkResult:
 class NodeExecutor:
     """MVP node execution layer composed from runtime primitives."""
 
-    def __init__(self, *, patch_panel: PatchPanel, runtime: CardRuntime) -> None:
+    def __init__(
+        self,
+        *,
+        patch_panel: PatchPanel,
+        runtime: CardRuntime,
+        registry: PatchPanelRegistry | None = None,
+    ) -> None:
         self.patch_panel = patch_panel
         self.runtime = runtime
+        self.registry = registry
 
     def execute_source(
         self,
@@ -106,6 +119,8 @@ class NodeExecutor:
 
     def execute_validator(self, request: ValidatorExecutionInput) -> CardEvent:
         node = self._node(request.validator_id, NodeType.VALIDATOR)
+        if node.config.get("validation_handler") == "patch_panel_topology":
+            request = self._topology_validation_request(node, request)
         selected_exit = request.selected_exit
         if selected_exit is None and self._requires_selected_exit(node):
             raise InvalidOperationError(
@@ -120,6 +135,7 @@ class NodeExecutor:
             accepted=accepted,
             reason=request.reason,
             output_pipe=selected_exit,
+            payload=request.payload,
             idempotency_key=request.idempotency_key,
         )
 
@@ -135,6 +151,12 @@ class NodeExecutor:
         card = self.runtime.get_card(card_id)
         if card.metadata.get("shadow") and not node.config.get("allow_shadow_egress", False):
             raise InvalidOperationError("shadow cards cannot execute production sinks")
+        self._ensure_card_at_sink(node, card)
+        external_reference = self._execute_configured_sink(
+            node,
+            card,
+            external_reference,
+        )
         event = self.runtime.record_event(
             card_id=card_id,
             event_type="sink_executed",
@@ -142,12 +164,143 @@ class NodeExecutor:
             payload={
                 "sink_id": node.id,
                 "external_reference": external_reference,
+                "registry_entry_id": (
+                    external_reference
+                    if _egress_contract_type(node) == "registry_publication"
+                    else None
+                ),
                 "egress_contract": node.config.get("egress_contract"),
                 "egress_idempotency": node.config.get("egress_idempotency"),
             },
             idempotency_key=idempotency_key,
         )
         return SinkResult(event=event, external_reference=external_reference)
+
+    def _topology_validation_request(
+        self,
+        node: NodeDefinition,
+        request: ValidatorExecutionInput,
+    ) -> ValidatorExecutionInput:
+        if request.accepted is not None or request.selected_exit is not None:
+            return request
+
+        card = self.runtime.get_card(request.card_id)
+        valid_exit = _configured_exit(node, "valid_exit")
+        invalid_exit = _configured_exit(node, "invalid_exit")
+        try:
+            candidate = PatchPanel.model_validate(card.payload.get("candidate_definition"))
+            report = PatchPanelValidator().validate(candidate)
+        except (PatchPanelValidationError, ValueError) as exc:
+            payload = {
+                **request.payload,
+                "validation_handler": "patch_panel_topology",
+                "candidate_patch_panel_id": _candidate_id(card.payload),
+                "errors": _validation_errors(exc),
+            }
+            return request.model_copy(
+                update={
+                    "accepted": False,
+                    "selected_exit": invalid_exit,
+                    "reason": str(exc),
+                    "payload": payload,
+                }
+            )
+
+        payload = {
+            **request.payload,
+            "validation_handler": "patch_panel_topology",
+            "candidate_patch_panel_id": candidate.id,
+            "node_count": report.node_count,
+            "edge_count": report.edge_count,
+            "cycles": report.cycles,
+        }
+        return request.model_copy(
+            update={
+                "accepted": True,
+                "selected_exit": valid_exit,
+                "reason": request.reason or "Patch Panel topology validation passed",
+                "payload": payload,
+            }
+        )
+
+    def _ensure_card_at_sink(self, node: NodeDefinition, card: Card) -> None:
+        input_buckets = {
+            self.patch_panel.pipe_bindings[pipe].bucket
+            for pipe in node.input_pipes
+            if pipe in self.patch_panel.pipe_bindings
+        }
+        if input_buckets and card.current_bucket not in input_buckets:
+            formatted = ", ".join(sorted(input_buckets))
+            raise ConflictError(
+                f"card '{card.id}' is in bucket '{card.current_bucket}', not sink input "
+                f"bucket(s): {formatted}"
+            )
+
+    def _execute_configured_sink(
+        self,
+        node: NodeDefinition,
+        card: Card,
+        external_reference: str | None,
+    ) -> str | None:
+        contract = node.config.get("egress_contract")
+        if not isinstance(contract, dict) or contract.get("type") != "registry_publication":
+            return external_reference
+        if self.registry is None:
+            raise InvalidOperationError("registry publication sink requires a registry")
+        self._ensure_registry_publication_history(card)
+
+        candidate = PatchPanel.model_validate(card.payload.get("candidate_definition"))
+        metadata = PatchPanelRegistryMetadata.model_validate(card.payload.get("registry_metadata"))
+        published_metadata = metadata.model_copy(
+            update={"status": PatchPanelRegistryStatus.PUBLISHED}
+        )
+        self.runtime.register_patch_panel(candidate)
+        existing = next(
+            (
+                entry
+                for entry in self.registry.search(
+                    PatchPanelRegistrySearch(include_archived=True, include_superseded=True)
+                )
+                if entry.patch_panel_id == candidate.id and entry.version == candidate.version
+            ),
+            None,
+        )
+        if existing is None:
+            entry = self.registry.register(
+                PatchPanelRegistryEntry.from_patch_panel(
+                    candidate,
+                    published_metadata,
+                    metadata={
+                        "proposal_card_id": str(card.id),
+                        "published_by_sink": node.id,
+                        "genesis_intent_id": card.payload.get("genesis_intent_id"),
+                    },
+                )
+            )
+        else:
+            entry = existing
+        return external_reference or str(entry.id)
+
+    def _ensure_registry_publication_history(self, card: Card) -> None:
+        history = self.runtime.card_history(card.id)
+        topology_validated = any(
+            event.event_type == "card_validated"
+            and event.actor_id == "topological_validator"
+            and event.payload.get("accepted") is True
+            and event.payload.get("output_pipe") == "topology_valid"
+            for event in history
+        )
+        governance_approved = any(
+            event.event_type == "card_validated"
+            and event.actor_id == "governance_reviewer"
+            and event.payload.get("accepted") is True
+            and event.payload.get("output_pipe") == "proposal_approved"
+            for event in history
+        )
+        if not topology_validated or not governance_approved:
+            raise ConflictError(
+                "registry publication requires topology validation and governance approval history"
+            )
 
     def _node(self, node_id: str, expected_type: NodeType) -> NodeDefinition:
         for node in self.patch_panel.nodes:
@@ -198,3 +351,32 @@ class NodeExecutor:
             f"routing validator '{node.id}' requires config.accept_exits when accepted "
             "is not provided"
         )
+
+
+def _configured_exit(node: NodeDefinition, key: str) -> str:
+    value = node.config.get(key)
+    if not isinstance(value, str):
+        raise InvalidOperationError(f"validator '{node.id}' requires config.{key}")
+    return value
+
+
+def _candidate_id(payload: dict[str, Any]) -> str | None:
+    candidate = payload.get("candidate_definition")
+    if isinstance(candidate, dict):
+        value = candidate.get("id")
+        return str(value) if value is not None else None
+    return None
+
+
+def _validation_errors(exc: Exception) -> list[str]:
+    if isinstance(exc, PatchPanelValidationError):
+        return exc.errors
+    return [str(exc)]
+
+
+def _egress_contract_type(node: NodeDefinition) -> str | None:
+    contract = node.config.get("egress_contract")
+    if isinstance(contract, dict):
+        value = contract.get("type")
+        return str(value) if value is not None else None
+    return None

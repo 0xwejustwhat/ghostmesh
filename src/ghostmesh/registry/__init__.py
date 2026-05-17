@@ -1,6 +1,5 @@
 """Patch Panel registry services."""
 
-from ghostmesh.registry.proposals import InMemoryPatchPanelProposalStore, PatchPanelProposalStore
 from ghostmesh.registry.service import (
     InMemoryPatchPanelRegistry,
     PatchPanelRegistry,
@@ -10,9 +9,7 @@ from ghostmesh.registry.service import (
 
 __all__ = [
     "InMemoryPatchPanelRegistry",
-    "InMemoryPatchPanelProposalStore",
     "PatchPanelRegistry",
     "PatchPanelRegistrySearch",
-    "PatchPanelProposalStore",
     "PostgresPatchPanelRegistry",
 ]

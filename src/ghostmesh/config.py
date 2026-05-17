@@ -16,6 +16,9 @@ class Settings:
     authorization_repository: str = "memory"
     development_authority_enabled: bool = False
     development_participant_id: str = "dev-admin"
+    system_patch_panel_paths: tuple[str, ...] = (
+        "src/ghostmesh/defaults/patchpanels/system-pp-approval.yaml",
+    )
 
 
 @lru_cache
@@ -33,6 +36,10 @@ def get_settings() -> Settings:
         authorization_repository=os.getenv("GHOSTMESH_AUTHORIZATION_REPOSITORY", "memory"),
         development_authority_enabled=_env_bool("GHOSTMESH_DEVELOPMENT_AUTHORITY_ENABLED", False),
         development_participant_id=os.getenv("GHOSTMESH_DEVELOPMENT_PARTICIPANT_ID", "dev-admin"),
+        system_patch_panel_paths=_env_list(
+            "GHOSTMESH_SYSTEM_PATCH_PANEL_PATHS",
+            ("src/ghostmesh/defaults/patchpanels/system-pp-approval.yaml",),
+        ),
     )
 
 
@@ -41,3 +48,11 @@ def _env_bool(name: str, default: bool) -> bool:
     if value is None:
         return default
     return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _env_list(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    items = tuple(item.strip() for item in value.split(",") if item.strip())
+    return items or default

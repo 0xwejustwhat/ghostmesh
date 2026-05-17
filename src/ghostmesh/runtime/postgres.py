@@ -430,6 +430,7 @@ class PostgresCardRuntime:
         accepted: bool,
         reason: str | None = None,
         output_pipe: str | None = None,
+        payload: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
     ) -> CardEvent:
         with Session(self.engine) as session, session.begin():
@@ -444,7 +445,7 @@ class PostgresCardRuntime:
                 accepted=accepted,
                 reason=reason,
                 output_pipe=output_pipe,
-                payload={"output_pipe": output_pipe} if output_pipe else {},
+                payload=payload or {},
             )
             session.execute(
                 validation_results.insert().values(
@@ -464,6 +465,7 @@ class PostgresCardRuntime:
                 "reason": reason,
                 "validation_result_id": str(result.id),
             }
+            event_payload.update(payload or {})
             if output_pipe:
                 patch_panel = self._get_patch_panel_for_card(session, card)
                 destination_bucket, _node_id = resolve_pipe_bucket(

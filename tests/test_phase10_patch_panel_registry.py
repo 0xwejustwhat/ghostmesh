@@ -147,7 +147,7 @@ def test_registry_api_supports_authorized_registration_and_discovery() -> None:
     assert create_response.status_code == 200, create_response.text
     assert search_response.status_code == 200, search_response.text
     assert search_response.json()[0]["name"] == "Hello World"
-    assert runtime.list_patch_panels()[0].id == "hello_world"
+    assert any(patch_panel.id == "hello_world" for patch_panel in runtime.list_patch_panels())
     assert repository.audit_events[-1].allowed is True
 
 

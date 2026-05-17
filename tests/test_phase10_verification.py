@@ -25,7 +25,7 @@ from ghostmesh.domain import (
     ScopeType,
 )
 from ghostmesh.patchpanel import load_patch_panel
-from ghostmesh.registry import InMemoryPatchPanelProposalStore, InMemoryPatchPanelRegistry
+from ghostmesh.registry import InMemoryPatchPanelRegistry
 from ghostmesh.runtime import InMemoryCardRuntime
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "patchpanels"
@@ -81,10 +81,9 @@ def test_authorization_denies_wrong_permission_suspended_and_missing_participant
     assert [event.allowed for event in repository.audit_events] == [False, False, False]
 
 
-def test_workflow_architect_can_discover_and_propose_but_not_self_promote() -> None:
+def test_workflow_architect_can_propose_but_not_use_removed_promotion_route() -> None:
     runtime = InMemoryCardRuntime()
     registry = InMemoryPatchPanelRegistry()
-    proposal_store = InMemoryPatchPanelProposalStore()
     repository = InMemoryAuthorizationRepository(
         participants=[Participant(id="architect", type=ParticipantType.AGENT)]
     )
@@ -108,7 +107,6 @@ def test_workflow_architect_can_discover_and_propose_but_not_self_promote() -> N
             settings=Settings(authorization_enabled=True),
             runtime=runtime,
             registry=registry,
-            proposal_store=proposal_store,
             authorization_service=AuthorizationService(repository),
         )
     )
@@ -121,18 +119,25 @@ def test_workflow_architect_can_discover_and_propose_but_not_self_promote() -> N
         status=PatchPanelRegistryStatus.REVIEW,
     )
 
-    proposal_response = client.post(
-        "/registry/patchpanels/proposals",
+    intent_response = client.post(
+        "/genesis/intents",
         json={
-            "proposal_type": "create",
+            "requested_by": "architect",
+            "deduplication_key": "architect-proposal",
+            "goal": "create candidate",
+            "input_type": "brief",
+            "desired_outputs": ["artifact"],
+            "tags": ["candidate"],
+        },
+        headers={"X-Ghostmesh-Participant": "architect"},
+    )
+    proposal_response = client.post(
+        f"/genesis/intents/{intent_response.json()['id']}/propose",
+        json={
             "proposed_by": "architect",
             "candidate_definition": patch_panel.model_dump(mode="json"),
             "registry_metadata": metadata.model_dump(mode="json"),
         },
-        headers={"X-Ghostmesh-Participant": "architect"},
-    )
-    discover_response = client.get(
-        f"/registry/patchpanels/proposals/{proposal_response.json()['id']}",
         headers={"X-Ghostmesh-Participant": "architect"},
     )
     promote_response = client.post(
@@ -141,10 +146,10 @@ def test_workflow_architect_can_discover_and_propose_but_not_self_promote() -> N
         headers={"X-Ghostmesh-Participant": "architect"},
     )
 
+    assert intent_response.status_code == 200, intent_response.text
     assert proposal_response.status_code == 200, proposal_response.text
-    assert discover_response.status_code == 200, discover_response.text
-    assert promote_response.status_code == 403
-    assert promote_response.json() == {"detail": "no matching permission grant"}
+    assert proposal_response.json()["workflow_version"] == "system_pp_approval:1.0.0"
+    assert promote_response.status_code == 404
 
 
 def test_shadow_participant_cannot_execute_production_sink() -> None:
@@ -199,7 +204,6 @@ def test_genesis_audit_payloads_store_references_not_raw_intent_goal() -> None:
             settings=Settings(authorization_enabled=True),
             runtime=InMemoryCardRuntime(),
             registry=InMemoryPatchPanelRegistry(),
-            proposal_store=InMemoryPatchPanelProposalStore(),
             authorization_service=AuthorizationService(repository),
         )
     )
@@ -235,6 +239,6 @@ def test_phase10_docs_are_linked_from_readme() -> None:
     assert "Do not orchestrate agents. Choreograph work." in readme
     assert "`Participant` records" in readme
     assert "Routing Validators (Junctions)" in readme
-    assert "docs/participant_authority_architecture.md" in readme
-    assert "docs/patch_panel_registry_architecture.md" in readme
-    assert "docs/intent_driven_genesis_architecture.md" in readme
+    assert "docs/architecture/participant_authority.md" in readme
+    assert "docs/architecture/patch_panel_registry.md" in readme
+    assert "docs/architecture/intent_driven_genesis.md" in readme

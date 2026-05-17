@@ -85,16 +85,6 @@ Source boundaries map authorized external events into Cards and deduplicate with
 Search supports exact filters such as `tag`, `input_type`, `output_type`,
 `required_tool`, `risk_level`, and `owner_participant_id`.
 
-## Patch Panel Proposals
-
-- `POST /registry/patchpanels/proposals`
-- `GET /registry/patchpanels/proposals/{proposal_id}`
-- `POST /registry/patchpanels/proposals/{proposal_id}/approve`
-- `POST /registry/patchpanels/proposals/{proposal_id}/reject`
-
-Valid proposals enter review without publishing. Approval requires separate promotion
-and publishing authority.
-
 ## Intent-Driven Genesis
 
 - `POST /genesis/intents`
@@ -103,7 +93,10 @@ and publishing authority.
 - `POST /genesis/intents/{intent_id}/propose`
 
 Genesis accepts structured intent only. Free-form prompt parsing belongs outside the
-runtime.
+runtime. When a missing workflow is proposed, `/genesis/intents/{intent_id}/propose`
+creates a normal Card in `system_pp_approval`; validation, governance routing, rejection,
+and registry publication proceed through `/nodes/validator/execute` and
+`/nodes/sink/execute`.
 
 ## Operator Views
 

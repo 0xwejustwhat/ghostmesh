@@ -9,14 +9,14 @@ from ghostmesh.domain import (
     GenesisIntentConstraints,
     GenesisIntentStatus,
     PatchPanel,
-    PatchPanelProposal,
-    PatchPanelProposalType,
     PatchPanelRegistryEntry,
     PatchPanelRegistryMetadata,
 )
-from ghostmesh.registry import PatchPanelProposalStore, PatchPanelRegistry, PatchPanelRegistrySearch
+from ghostmesh.registry import PatchPanelRegistry, PatchPanelRegistrySearch
 from ghostmesh.runtime.errors import ConflictError, NotFoundError
 from ghostmesh.runtime.service import CardRuntime
+
+SYSTEM_PP_APPROVAL_ID = "system_pp_approval"
 
 
 class GenesisService:
@@ -25,11 +25,9 @@ class GenesisService:
         *,
         runtime: CardRuntime,
         registry: PatchPanelRegistry,
-        proposal_store: PatchPanelProposalStore,
     ) -> None:
         self.runtime = runtime
         self.registry = registry
-        self.proposal_store = proposal_store
         self.intents: dict[UUID, GenesisIntent] = {}
         self.deduplication_index: dict[str, UUID] = {}
 
@@ -143,20 +141,36 @@ class GenesisService:
         proposed_by: str,
         candidate_definition: PatchPanel,
         registry_metadata: PatchPanelRegistryMetadata,
-    ) -> PatchPanelProposal:
+        base_patch_panel_id: str | None = None,
+        base_version: str | None = None,
+    ) -> Card:
         intent = self.get(intent_id)
-        proposal = self.proposal_store.create(
-            proposal_type=PatchPanelProposalType.CREATE,
-            proposed_by=proposed_by,
-            candidate_definition=candidate_definition,
-            registry_metadata=registry_metadata,
+        card = self.runtime.create_card(
+            patch_panel_id=SYSTEM_PP_APPROVAL_ID,
+            payload={
+                "kind": "patch_panel_proposal",
+                "proposal_type": "create",
+                "genesis_intent_id": str(intent.id),
+                "proposed_by": proposed_by,
+                "candidate_definition": candidate_definition.model_dump(mode="json"),
+                "registry_metadata": registry_metadata.model_dump(mode="json"),
+                "base_patch_panel_id": base_patch_panel_id,
+                "base_version": base_version,
+            },
+            metadata={
+                "genesis_intent_id": str(intent.id),
+                "proposed_by": proposed_by,
+                "candidate_patch_panel_id": candidate_definition.id,
+            },
+            idempotency_key=f"genesis:propose:{intent.id}:{candidate_definition.id}:"
+            f"{candidate_definition.version}",
         )
         updated = intent.model_copy(
             update={
                 "status": GenesisIntentStatus.PROPOSED,
-                "proposal_id": proposal.id,
+                "proposal_card_id": card.id,
                 "updated_at": datetime.now(UTC),
             }
         )
         self.intents[intent.id] = updated
-        return proposal
+        return card

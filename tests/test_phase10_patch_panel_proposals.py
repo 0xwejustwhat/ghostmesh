@@ -8,12 +8,8 @@ from ghostmesh.api.main import create_app
 from ghostmesh.auth import AuthorizationService, InMemoryAuthorizationRepository
 from ghostmesh.config import Settings
 from ghostmesh.domain import (
-    AuditAction,
     Participant,
     ParticipantType,
-    PatchPanel,
-    PatchPanelProposalStatus,
-    PatchPanelProposalType,
     PatchPanelRegistryMetadata,
     PatchPanelRegistryStatus,
     PermissionGrant,
@@ -21,15 +17,14 @@ from ghostmesh.domain import (
     Scope,
     ScopeType,
 )
+from ghostmesh.nodes import NodeExecutor, ValidatorExecutionInput
 from ghostmesh.patchpanel import load_patch_panel
-from ghostmesh.registry import (
-    InMemoryPatchPanelProposalStore,
-    InMemoryPatchPanelRegistry,
-    PatchPanelRegistrySearch,
-)
+from ghostmesh.registry import InMemoryPatchPanelRegistry, PatchPanelRegistrySearch
 from ghostmesh.runtime import InMemoryCardRuntime
 
-EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "patchpanels"
+ROOT = Path(__file__).resolve().parents[1]
+EXAMPLES = ROOT / "examples" / "patchpanels"
+SYSTEM_PP = ROOT / "src" / "ghostmesh" / "defaults" / "patchpanels" / "system-pp-approval.yaml"
 
 
 def proposal_metadata() -> PatchPanelRegistryMetadata:
@@ -49,194 +44,232 @@ def proposal_metadata() -> PatchPanelRegistryMetadata:
     )
 
 
-def proposal_payload(patch_panel: PatchPanel) -> dict[str, object]:
-    return {
-        "proposal_type": PatchPanelProposalType.CREATE.value,
-        "proposed_by": "architect",
-        "candidate_definition": patch_panel.model_dump(mode="json"),
-        "registry_metadata": proposal_metadata().model_dump(mode="json"),
-    }
-
-
 def auth_repository() -> InMemoryAuthorizationRepository:
     return InMemoryAuthorizationRepository(
         participants=[
             Participant(id="architect", type=ParticipantType.AGENT),
             Participant(id="reviewer", type=ParticipantType.HUMAN),
+            Participant(id="system-sink", type=ParticipantType.SYSTEM_SERVICE),
         ],
         permission_grants=[
+            PermissionGrant(
+                participant_id="architect",
+                permission=PermissionName.PATCH_PANEL_DISCOVER,
+                scope=Scope.development_global(),
+            ),
             PermissionGrant(
                 participant_id="architect",
                 permission=PermissionName.MUTATION_PROPOSE,
                 scope=Scope(type=ScopeType.PATCH_PANEL, id="hello_world"),
             ),
             PermissionGrant(
-                participant_id="architect",
-                permission=PermissionName.PATCH_PANEL_DISCOVER,
+                participant_id="reviewer",
+                permission=PermissionName.VALIDATION_SUBMIT,
                 scope=Scope.development_global(),
             ),
             PermissionGrant(
-                participant_id="reviewer",
-                permission=PermissionName.MUTATION_VALIDATE,
-                scope=Scope(type=ScopeType.PATCH_PANEL, id="hello_world"),
-            ),
-            PermissionGrant(
-                participant_id="reviewer",
-                permission=PermissionName.MUTATION_PROMOTE,
-                scope=Scope(type=ScopeType.PATCH_PANEL, id="hello_world"),
-            ),
-            PermissionGrant(
-                participant_id="reviewer",
-                permission=PermissionName.PATCH_PANEL_PUBLISH_VERSION,
-                scope=Scope(type=ScopeType.PATCH_PANEL, id="hello_world"),
-            ),
-            PermissionGrant(
-                participant_id="reviewer",
-                permission=PermissionName.PATCH_PANEL_DISCOVER,
-                scope=Scope.development_global(),
+                participant_id="system-sink",
+                permission=PermissionName.SINK_EXECUTE,
+                scope=Scope(type=ScopeType.PATCH_PANEL, id="system_pp_approval"),
             ),
         ],
     )
 
 
-def test_valid_proposal_enters_review_without_registering_runtime_workflow() -> None:
+def test_genesis_proposal_creates_system_approval_card() -> None:
     runtime = InMemoryCardRuntime()
     registry = InMemoryPatchPanelRegistry()
-    proposal_store = InMemoryPatchPanelProposalStore()
-    repository = auth_repository()
     client = TestClient(
         create_app(
             settings=Settings(authorization_enabled=True),
             runtime=runtime,
             registry=registry,
-            proposal_store=proposal_store,
-            authorization_service=AuthorizationService(repository),
+            authorization_service=AuthorizationService(auth_repository()),
         )
     )
+    intent = client.post(
+        "/genesis/intents",
+        json={
+            "requested_by": "architect",
+            "deduplication_key": "proposal-card",
+            "goal": "create a generated hello workflow",
+            "input_type": "brief",
+            "desired_outputs": ["approved_artifact"],
+            "tags": ["generated"],
+        },
+        headers={"X-Ghostmesh-Participant": "architect"},
+    ).json()
     patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
 
     response = client.post(
-        "/registry/patchpanels/proposals",
-        json=proposal_payload(patch_panel),
+        f"/genesis/intents/{intent['id']}/propose",
+        json={
+            "proposed_by": "architect",
+            "candidate_definition": patch_panel.model_dump(mode="json"),
+            "registry_metadata": proposal_metadata().model_dump(mode="json"),
+        },
         headers={"X-Ghostmesh-Participant": "architect"},
     )
 
     assert response.status_code == 200, response.text
-    assert response.json()["status"] == PatchPanelProposalStatus.IN_REVIEW.value
-    assert response.json()["validation_report"]["valid"] is True
-    assert runtime.list_patch_panels() == []
-    assert registry.search(PatchPanelRegistrySearch()) == []
-    assert repository.audit_events[-1].action == AuditAction.PATCH_PANEL_PROPOSAL_SUBMITTED
+    card = response.json()
+    assert card["workflow_version"] == "system_pp_approval:1.0.0"
+    assert card["current_bucket"] == "topology_proposals"
+    assert card["payload"]["kind"] == "patch_panel_proposal"
+    assert card["payload"]["candidate_definition"]["id"] == "hello_world"
+    assert client.get(
+        f"/genesis/intents/{intent['id']}",
+        headers={"X-Ghostmesh-Participant": "architect"},
+    ).json()["proposal_card_id"] == card["id"]
 
 
-def test_invalid_generated_patch_panel_fails_before_review() -> None:
+def test_system_topology_validator_routes_valid_and_invalid_candidates() -> None:
     runtime = InMemoryCardRuntime()
-    proposal_store = InMemoryPatchPanelProposalStore()
-    client = TestClient(
-        create_app(
-            settings=Settings(authorization_enabled=True),
-            runtime=runtime,
-            proposal_store=proposal_store,
-            authorization_service=AuthorizationService(auth_repository()),
-        )
+    registry = InMemoryPatchPanelRegistry()
+    create_app(settings=Settings(), runtime=runtime, registry=registry)
+    system_patch_panel = load_patch_panel(SYSTEM_PP)
+    candidate = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
+    executor = NodeExecutor(patch_panel=system_patch_panel, runtime=runtime, registry=registry)
+    valid_card = runtime.create_card(
+        patch_panel_id="system_pp_approval",
+        payload={
+            "candidate_definition": candidate.model_dump(mode="json"),
+            "registry_metadata": proposal_metadata().model_dump(mode="json"),
+        },
     )
-    patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
-    invalid_patch_panel = patch_panel.model_copy(
+    invalid_candidate = candidate.model_copy(
         update={
             "pipe_bindings": {
                 key: value
-                for key, value in patch_panel.pipe_bindings.items()
+                for key, value in candidate.pipe_bindings.items()
                 if key != "worker_input"
             }
         }
     )
-
-    response = client.post(
-        "/registry/patchpanels/proposals",
-        json=proposal_payload(invalid_patch_panel),
-        headers={"X-Ghostmesh-Participant": "architect"},
+    invalid_card = runtime.create_card(
+        patch_panel_id="system_pp_approval",
+        payload={
+            "candidate_definition": invalid_candidate.model_dump(mode="json"),
+            "registry_metadata": proposal_metadata().model_dump(mode="json"),
+        },
     )
 
-    assert response.status_code == 422
-    assert "validation failed" in response.json()["detail"]
-    assert proposal_store.proposals == {}
-
-
-def test_approval_is_separate_permissioned_action_and_publishes_registry_entry() -> None:
-    runtime = InMemoryCardRuntime()
-    registry = InMemoryPatchPanelRegistry()
-    proposal_store = InMemoryPatchPanelProposalStore()
-    repository = auth_repository()
-    client = TestClient(
-        create_app(
-            settings=Settings(authorization_enabled=True),
-            runtime=runtime,
-            registry=registry,
-            proposal_store=proposal_store,
-            authorization_service=AuthorizationService(repository),
+    valid_event = executor.execute_validator(
+        ValidatorExecutionInput(
+            card_id=valid_card.id,
+            validator_id="topological_validator",
         )
     )
-    patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
-    create_response = client.post(
-        "/registry/patchpanels/proposals",
-        json=proposal_payload(patch_panel),
-        headers={"X-Ghostmesh-Participant": "architect"},
-    )
-    proposal_id = create_response.json()["id"]
-
-    denied_response = client.post(
-        f"/registry/patchpanels/proposals/{proposal_id}/approve",
-        json={"reason": "self approval should not pass"},
-        headers={"X-Ghostmesh-Participant": "architect"},
-    )
-    approved_response = client.post(
-        f"/registry/patchpanels/proposals/{proposal_id}/approve",
-        json={"reason": "valid generated workflow"},
-        headers={"X-Ghostmesh-Participant": "reviewer"},
-    )
-
-    assert denied_response.status_code == 403
-    assert approved_response.status_code == 200, approved_response.text
-    approved = approved_response.json()
-    assert approved["status"] == PatchPanelProposalStatus.PROMOTED.value
-    assert [event["action"] for event in approved["review_events"]] == ["submitted", "approved"]
-    assert runtime.list_patch_panels()[0].id == "hello_world"
-    published_entries = registry.search(PatchPanelRegistrySearch())
-    assert published_entries[0].status == PatchPanelRegistryStatus.PUBLISHED
-    assert repository.audit_events[-1].action == AuditAction.PATCH_PANEL_PROPOSAL_APPROVED
-
-
-def test_rejection_keeps_append_only_review_history_and_does_not_publish() -> None:
-    runtime = InMemoryCardRuntime()
-    registry = InMemoryPatchPanelRegistry()
-    proposal_store = InMemoryPatchPanelProposalStore()
-    repository = auth_repository()
-    client = TestClient(
-        create_app(
-            settings=Settings(authorization_enabled=True),
-            runtime=runtime,
-            registry=registry,
-            proposal_store=proposal_store,
-            authorization_service=AuthorizationService(repository),
+    invalid_event = executor.execute_validator(
+        ValidatorExecutionInput(
+            card_id=invalid_card.id,
+            validator_id="topological_validator",
         )
     )
-    patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
-    proposal_id = client.post(
-        "/registry/patchpanels/proposals",
-        json=proposal_payload(patch_panel),
-        headers={"X-Ghostmesh-Participant": "architect"},
-    ).json()["id"]
 
-    rejected_response = client.post(
-        f"/registry/patchpanels/proposals/{proposal_id}/reject",
-        json={"reason": "needs clearer owner"},
-        headers={"X-Ghostmesh-Participant": "reviewer"},
+    assert valid_event.payload["accepted"] is True
+    assert valid_event.payload["output_pipe"] == "topology_valid"
+    assert runtime.get_card(valid_card.id).current_bucket == "governance_review"
+    assert invalid_event.payload["accepted"] is False
+    assert invalid_event.payload["output_pipe"] == "topology_invalid"
+    assert runtime.get_card(invalid_card.id).current_bucket == "rejected_proposals"
+
+
+def test_governance_and_registry_publication_use_generic_node_execution() -> None:
+    runtime = InMemoryCardRuntime()
+    registry = InMemoryPatchPanelRegistry()
+    create_app(settings=Settings(), runtime=runtime, registry=registry)
+    system_patch_panel = load_patch_panel(SYSTEM_PP)
+    candidate = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
+    card = runtime.create_card(
+        patch_panel_id="system_pp_approval",
+        payload={
+            "genesis_intent_id": "intent-1",
+            "candidate_definition": candidate.model_dump(mode="json"),
+            "registry_metadata": proposal_metadata().model_dump(mode="json"),
+        },
+    )
+    executor = NodeExecutor(patch_panel=system_patch_panel, runtime=runtime, registry=registry)
+    executor.execute_validator(
+        ValidatorExecutionInput(card_id=card.id, validator_id="topological_validator")
+    )
+    governance_event = executor.execute_validator(
+        ValidatorExecutionInput(
+            card_id=card.id,
+            validator_id="governance_reviewer",
+            selected_exit="proposal_approved",
+            reason="approved by role-governed reviewer",
+        )
+    )
+    sink = executor.execute_sink(card_id=card.id, sink_id="registry_publication_sink")
+
+    assert governance_event.payload["accepted"] is True
+    assert runtime.get_card(card.id).current_bucket == "registry_publication"
+    assert sink.external_reference is not None
+    published = [
+        entry
+        for entry in registry.search(PatchPanelRegistrySearch(include_archived=True))
+        if entry.patch_panel_id == "hello_world"
+    ]
+    assert len(published) == 1
+    assert published[0].status == PatchPanelRegistryStatus.PUBLISHED
+    assert runtime.get_card(card.id).current_bucket == "registry_publication"
+
+
+def test_removed_proposal_routes_are_absent() -> None:
+    client = TestClient(create_app(settings=Settings()))
+
+    assert client.post("/registry/patchpanels/proposals", json={}).status_code in {404, 405}
+    assert client.post(
+        "/registry/patchpanels/proposals/00000000-0000-0000-0000-000000000000/approve",
+        json={},
+    ).status_code in {404, 405}
+    assert client.post(
+        "/registry/patchpanels/proposals/00000000-0000-0000-0000-000000000000/reject",
+        json={},
+    ).status_code in {404, 405}
+
+
+def test_system_bootstrap_is_idempotent() -> None:
+    runtime = InMemoryCardRuntime()
+    registry = InMemoryPatchPanelRegistry()
+
+    first = create_app(settings=Settings(), runtime=runtime, registry=registry)
+    second = create_app(settings=Settings(), runtime=runtime, registry=registry)
+
+    system_panels = [
+        panel for panel in runtime.list_patch_panels() if panel.id == "system_pp_approval"
+    ]
+    assert len(system_panels) == 1
+    assert len(
+        [
+            entry
+            for entry in registry.search(
+                PatchPanelRegistrySearch(include_archived=True, include_superseded=True)
+            )
+            if entry.patch_panel_id == "system_pp_approval"
+        ]
+    ) == 1
+    assert first.state.system_bootstrap_results[0].registered_registry is True
+    assert second.state.system_bootstrap_results[0].registered_registry is False
+
+
+def test_system_bootstrap_honors_override_paths() -> None:
+    runtime = InMemoryCardRuntime()
+    registry = InMemoryPatchPanelRegistry()
+
+    create_app(
+        settings=Settings(
+            system_patch_panel_paths=(str(EXAMPLES / "hello-world-patchpanel.yaml"),)
+        ),
+        runtime=runtime,
+        registry=registry,
     )
 
-    assert rejected_response.status_code == 200, rejected_response.text
-    rejected = rejected_response.json()
-    assert rejected["status"] == PatchPanelProposalStatus.REJECTED.value
-    assert [event["action"] for event in rejected["review_events"]] == ["submitted", "rejected"]
-    assert rejected["review_events"][1]["reason"] == "needs clearer owner"
-    assert runtime.list_patch_panels() == []
-    assert registry.search(PatchPanelRegistrySearch()) == []
+    assert [panel.id for panel in runtime.list_patch_panels()] == ["hello_world"]
+    assert [
+        entry.patch_panel_id
+        for entry in registry.search(
+            PatchPanelRegistrySearch(include_archived=True, include_superseded=True)
+        )
+    ] == ["hello_world"]

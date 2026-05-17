@@ -37,7 +37,7 @@ External conversational clients may let users express high-level requirements in
 
 Once an intent is pushed through `/genesis/intents`, control is surrendered to the immutable topology of the target Patch Panel graph. The runtime evaluates the request against the Patch Panel Registry using dual identifiers: `patch_panel_id` and `version`. If a compatible published graph exists, Ghost Mesh creates a Card in the authorized ingress scope and the Patch Panel governs all subsequent movement.
 
-If a gap is detected, an agent or other participant filling the Workflow Architect role may draft a proposed topology modification layout and submit it as a sandboxed `PatchPanelProposal`. That proposal remains quarantined until independent validation and governance promote it to active production status. The proposing participant cannot publish its own topology, bypass validators, or execute production sinks unless separately granted those permissions in the relevant scope.
+If a gap is detected, an agent or other participant filling the Workflow Architect role may draft a proposed topology modification layout. Genesis submits that proposal as a normal Card in the system `system_pp_approval` Patch Panel. The proposal remains quarantined by declared buckets and validator exits until independent validation and governance route it to either rejection or the registry publication sink. The proposing participant cannot publish its own topology, bypass validators, or execute production sinks unless separately granted those permissions in the relevant scope.
 
 ## Technical Quickstart
 
@@ -76,8 +76,8 @@ poetry run uvicorn ghostmesh.api.main:app --reload
 ## Comprehensive Documentation Index
 
 - [Core Whitepaper](docs/ghost_mesh_updated_whitepaper%20v1.md) - The foundational technical thesis on labor liquidity substrates.
-- [System Architecture](docs/architecture.md) - State isolation layers, postgres index layouts, and artifact boundaries.
-- [Identity & RBAC Engine](docs/participant_authority_architecture.md) - Comprehensive permission grids, scopes, and functional role catalogs.
-- [Patch Panel Registry](docs/patch_panel_registry_architecture.md) - Contract tracking, version control, and multi-version pipeline index maps.
-- [Intent-Driven Genesis](docs/intent_driven_genesis_architecture.md) - Natural language translation mechanics and sandbox compilation states.
+- [System Architecture](docs/architecture/core_runtime.md) - State isolation layers, postgres index layouts, and artifact boundaries.
+- [Identity & RBAC Engine](docs/architecture/participant_authority.md) - Comprehensive permission grids, scopes, and functional role catalogs.
+- [Patch Panel Registry](docs/architecture/patch_panel_registry.md) - Contract tracking, version control, and multi-version pipeline index maps.
+- [Intent-Driven Genesis](docs/architecture/intent_driven_genesis.md) - Structured intent, proposal Cards, and `system_pp_approval` governance.
 - [Skill Catalogs](docs/skills/README.md) - MCP configuration models and prompt engineering rules for independent worker roles.

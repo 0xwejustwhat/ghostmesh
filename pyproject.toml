@@ -5,6 +5,7 @@ description = "Graph-native accountability runtime for human and AI work."
 authors = ["Ghost Mesh Contributors"]
 readme = "README.md"
 packages = [{ include = "ghostmesh", from = "src" }]
+include = ["src/ghostmesh/defaults/patchpanels/*.yaml"]
 
 [tool.poetry.dependencies]
 python = "^3.12"

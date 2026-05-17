@@ -20,11 +20,7 @@ from ghostmesh.domain import (
     ScopeType,
 )
 from ghostmesh.patchpanel import load_patch_panel
-from ghostmesh.registry import (
-    InMemoryPatchPanelProposalStore,
-    InMemoryPatchPanelRegistry,
-    PatchPanelRegistrySearch,
-)
+from ghostmesh.registry import InMemoryPatchPanelRegistry, PatchPanelRegistrySearch
 from ghostmesh.runtime import InMemoryCardRuntime
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples" / "patchpanels"
@@ -94,7 +90,6 @@ def auth_repository() -> InMemoryAuthorizationRepository:
 def test_genesis_intent_discovers_and_launches_existing_workflow() -> None:
     runtime = InMemoryCardRuntime()
     registry = InMemoryPatchPanelRegistry()
-    proposal_store = InMemoryPatchPanelProposalStore()
     repository = auth_repository()
     patch_panel = load_patch_panel(EXAMPLES / "hello-world-patchpanel.yaml")
     runtime.register_patch_panel(patch_panel)
@@ -106,7 +101,6 @@ def test_genesis_intent_discovers_and_launches_existing_workflow() -> None:
             settings=Settings(authorization_enabled=True),
             runtime=runtime,
             registry=registry,
-            proposal_store=proposal_store,
             authorization_service=AuthorizationService(repository),
         )
     )
@@ -135,7 +129,6 @@ def test_genesis_intent_is_idempotent_by_deduplication_key() -> None:
             settings=Settings(authorization_enabled=True),
             runtime=InMemoryCardRuntime(),
             registry=InMemoryPatchPanelRegistry(),
-            proposal_store=InMemoryPatchPanelProposalStore(),
             authorization_service=AuthorizationService(auth_repository()),
         )
     )
@@ -159,14 +152,12 @@ def test_genesis_intent_is_idempotent_by_deduplication_key() -> None:
 def test_genesis_proposes_candidate_when_no_existing_workflow_matches() -> None:
     runtime = InMemoryCardRuntime()
     registry = InMemoryPatchPanelRegistry()
-    proposal_store = InMemoryPatchPanelProposalStore()
     repository = auth_repository()
     client = TestClient(
         create_app(
             settings=Settings(authorization_enabled=True),
             runtime=runtime,
             registry=registry,
-            proposal_store=proposal_store,
             authorization_service=AuthorizationService(repository),
         )
     )
@@ -189,9 +180,14 @@ def test_genesis_proposes_candidate_when_no_existing_workflow_matches() -> None:
 
     assert intent["status"] == "design_required"
     assert proposal_response.status_code == 200, proposal_response.text
-    assert proposal_response.json()["status"] == "in_review"
-    assert runtime.list_patch_panels() == []
-    assert registry.search(PatchPanelRegistrySearch()) == []
+    assert proposal_response.json()["workflow_version"] == "system_pp_approval:1.0.0"
+    assert proposal_response.json()["current_bucket"] == "topology_proposals"
+    assert proposal_response.json()["payload"]["candidate_definition"]["id"] == "hello_world"
+    assert [panel.id for panel in runtime.list_patch_panels()] == ["system_pp_approval"]
+    assert [
+        entry.patch_panel_id
+        for entry in registry.search(PatchPanelRegistrySearch(include_archived=True))
+    ] == ["system_pp_approval"]
     assert repository.audit_events[-1].action == AuditAction.GENESIS_PROPOSAL_SUBMITTED
 
 
@@ -238,7 +234,14 @@ def test_genesis_launch_requires_card_create_scope() -> None:
 
 
 def test_workflow_genesis_example_patch_panel_is_valid() -> None:
-    patch_panel = load_patch_panel(EXAMPLES / "workflow-genesis-patchpanel.yaml")
+    patch_panel = load_patch_panel(
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "ghostmesh"
+        / "defaults"
+        / "patchpanels"
+        / "system-pp-approval.yaml"
+    )
 
-    assert patch_panel.id == "system_workflow_genesis"
-    assert any(node.id == "generative_designer_seat" for node in patch_panel.nodes)
+    assert patch_panel.id == "system_pp_approval"
+    assert any(node.id == "topological_validator" for node in patch_panel.nodes)

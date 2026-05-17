@@ -1,0 +1,115 @@
+id: system_pp_approval
+version: "1.0.0"
+description: System workflow for Patch Panel proposal validation, governance, and registry publication.
+metadata:
+  registry:
+    name: System Patch Panel Approval
+    description: Validates proposed Patch Panel topologies, routes governance decisions, and publishes approved registry entries.
+    tags:
+      - system
+      - governance
+      - patch-panel-approval
+    input_types:
+      - patch_panel_proposal
+    output_types:
+      - patch_panel_registry_entry
+    required_permissions:
+      - mutation:propose
+      - validation:submit
+      - sink:execute
+    risk_level: medium
+    status: published
+
+buckets:
+  - id: topology_proposals
+    description: Proposed Patch Panel definitions awaiting algorithmic topology validation.
+  - id: governance_review
+    description: Valid topology proposals awaiting role-driven governance review.
+  - id: registry_publication
+    description: Approved proposals ready for registry publication sink execution.
+  - id: rejected_proposals
+    description: Proposals rejected by topology validation or governance review.
+
+nodes:
+  - id: proposal_source
+    type: source
+    output_pipes:
+      - proposal_submitted
+  - id: topological_validator
+    type: validator
+    validator_kind: routing
+    input_pipes:
+      - topology_validation_input
+    output_pipes:
+      - topology_valid
+      - topology_invalid
+    config:
+      validation_handler: patch_panel_topology
+      valid_exit: topology_valid
+      invalid_exit: topology_invalid
+      accept_exits:
+        - topology_valid
+  - id: governance_reviewer
+    type: validator
+    validator_kind: routing
+    input_pipes:
+      - governance_review_input
+    output_pipes:
+      - proposal_approved
+      - proposal_rejected
+    config:
+      accept_exits:
+        - proposal_approved
+  - id: registry_publication_sink
+    type: sink
+    input_pipes:
+      - publication_input
+    config:
+      egress_contract:
+        type: registry_publication
+        external_reference_required: false
+
+pipe_bindings:
+  proposal_submitted:
+    node: proposal_source
+    direction: output
+    bucket: topology_proposals
+  topology_validation_input:
+    node: topological_validator
+    direction: input
+    bucket: topology_proposals
+  topology_valid:
+    node: topological_validator
+    direction: output
+    bucket: governance_review
+  topology_invalid:
+    node: topological_validator
+    direction: output
+    bucket: rejected_proposals
+  governance_review_input:
+    node: governance_reviewer
+    direction: input
+    bucket: governance_review
+  proposal_approved:
+    node: governance_reviewer
+    direction: output
+    bucket: registry_publication
+  proposal_rejected:
+    node: governance_reviewer
+    direction: output
+    bucket: rejected_proposals
+  publication_input:
+    node: registry_publication_sink
+    direction: input
+    bucket: registry_publication
+
+edges:
+  - from: proposal_source
+    to: topological_validator
+    on: card_created
+  - from: topological_validator
+    to: governance_reviewer
+    on: topology_valid
+  - from: governance_reviewer
+    to: registry_publication_sink
+    on: proposal_approved

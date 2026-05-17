@@ -76,6 +76,7 @@ class CardRuntime(Protocol):
         accepted: bool,
         reason: str | None = None,
         output_pipe: str | None = None,
+        payload: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
     ) -> CardEvent: ...
 

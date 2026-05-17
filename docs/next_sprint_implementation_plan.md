@@ -28,9 +28,9 @@ This sprint plan synthesizes:
 
 The following architecture documents are normative companions for this sprint plan:
 
-- `docs/participant_authority_architecture.md`: participant-neutral identity, roles, permissions, scopes, authorization decisions, audit events, and built-in role defaults.
-- `docs/patch_panel_registry_architecture.md`: Patch Panel registry metadata, lifecycle states, search APIs, governance APIs, and intent-driven discovery flow.
-- `docs/intent_driven_genesis_architecture.md`: generic `/genesis` ingress, Intent Operator and Workflow Architect responsibilities, generative designer seats, proposal flow, and participant-neutral workflow genesis.
+- `docs/architecture/participant_authority.md`: participant-neutral identity, roles, permissions, scopes, authorization decisions, audit events, and built-in role defaults.
+- `docs/architecture/patch_panel_registry.md`: Patch Panel registry metadata, lifecycle states, search APIs, governance APIs, and intent-driven discovery flow.
+- `docs/architecture/intent_driven_genesis.md`: generic `/genesis` ingress, Intent Operator and Workflow Architect responsibilities, proposal Cards, and participant-neutral workflow genesis.
 
 Implementation work should update these architecture documents when a design decision changes during the sprint.
 
@@ -81,7 +81,7 @@ Phase 10: Participant Authority, Workflow Registry, and Intent-Driven Genesis.
 
 ## Workstream 1: Participant Authority Domain Model
 
-Architecture reference: `docs/participant_authority_architecture.md`.
+Architecture reference: `docs/architecture/participant_authority.md`.
 
 ### Implementation Tasks
 
@@ -199,7 +199,7 @@ Architecture reference: `docs/participant_authority_architecture.md`.
 
 ## Workstream 4: Role Catalog and Governance Defaults
 
-Architecture reference: `docs/participant_authority_architecture.md`.
+Architecture reference: `docs/architecture/participant_authority.md`.
 
 ### Implementation Tasks
 
@@ -232,7 +232,7 @@ Architecture reference: `docs/participant_authority_architecture.md`.
 
 ## Workstream 5: Patch Panel Registry
 
-Architecture reference: `docs/patch_panel_registry_architecture.md`.
+Architecture reference: `docs/architecture/patch_panel_registry.md`.
 
 ### Implementation Tasks
 
@@ -277,7 +277,7 @@ Architecture reference: `docs/patch_panel_registry_architecture.md`.
 ### Implementation Tasks
 
 - Add a proposal model for new or modified Patch Panels:
-  - `proposal_id`
+  - `proposal_card_id`
   - `proposal_type`
   - `proposed_by`
   - `base_patch_panel_id`
@@ -312,7 +312,7 @@ Architecture reference: `docs/patch_panel_registry_architecture.md`.
 
 ## Workstream 7: Intent-Driven Genesis MVP
 
-Architecture reference: `docs/intent_driven_genesis_architecture.md`.
+Architecture reference: `docs/architecture/intent_driven_genesis.md`.
 
 ### Implementation Tasks
 

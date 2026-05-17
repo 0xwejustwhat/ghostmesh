@@ -88,9 +88,6 @@ class ScopeType(StrEnum):
 class AuditAction(StrEnum):
     AUTHORIZATION_ALLOWED = "authorization:allowed"
     AUTHORIZATION_DENIED = "authorization:denied"
-    PATCH_PANEL_PROPOSAL_SUBMITTED = "patch_panel_proposal:submitted"
-    PATCH_PANEL_PROPOSAL_APPROVED = "patch_panel_proposal:approved"
-    PATCH_PANEL_PROPOSAL_REJECTED = "patch_panel_proposal:rejected"
     GENESIS_INTENT_RECEIVED = "genesis:intent_received"
     GENESIS_REGISTRY_SEARCHED = "genesis:registry_searched"
     GENESIS_CANDIDATE_SELECTED = "genesis:candidate_selected"

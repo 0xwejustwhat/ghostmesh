@@ -7,7 +7,7 @@ from uuid import UUID
 import structlog
 
 from ghostmesh.domain import ArtifactReference, Card, CardEvent, Lease, PatchPanel
-from ghostmesh.runtime.errors import ConflictError, NotFoundError
+from ghostmesh.runtime.errors import ConflictError, InvalidOperationError, NotFoundError
 from ghostmesh.runtime.service import (
     ensure_active_lease,
     ensure_artifact_refs_belong_to_card,
@@ -97,16 +97,7 @@ class InMemoryCardRuntime:
         if cached := self._get_idempotent(idempotency_key):
             return _typed(cached, Lease)
 
-        patch_panel = self._single_patch_panel()
-        bucket, node_id = resolve_pipe_bucket(patch_panel, input_pipe, "input")
-        card = next(
-            (
-                card
-                for card in self._cards.values()
-                if card.current_bucket == bucket and not self._has_active_lease(card.id)
-            ),
-            None,
-        )
+        patch_panel, bucket, node_id, card = self._claim_target(input_pipe)
         if card is None:
             raise NotFoundError(f"no claimable cards in bucket '{bucket}'")
 
@@ -143,7 +134,7 @@ class InMemoryCardRuntime:
         lease = self._get_lease(lease_id)
         ensure_active_lease(lease)
         card = self._get_card(lease.card_id)
-        patch_panel = self._single_patch_panel()
+        patch_panel = self._get_patch_panel_for_card(card)
         destination_bucket, node_id = resolve_pipe_bucket(patch_panel, output_pipe, "output")
         ensure_artifact_refs_belong_to_card(card_id=card.id, artifact_refs=artifact_refs)
         ensure_artifacts_accepted(
@@ -276,25 +267,27 @@ class InMemoryCardRuntime:
         accepted: bool,
         reason: str | None = None,
         output_pipe: str | None = None,
+        payload: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
     ) -> CardEvent:
         if cached := self._get_idempotent(idempotency_key):
             return _typed(cached, CardEvent)
 
         card = self._get_card(card_id)
-        payload: dict[str, Any] = {"accepted": accepted, "reason": reason}
+        event_payload: dict[str, Any] = {"accepted": accepted, "reason": reason}
+        event_payload.update(payload or {})
         if output_pipe:
-            patch_panel = self._single_patch_panel()
+            patch_panel = self._get_patch_panel_for_card(card)
             destination_bucket, _node_id = resolve_pipe_bucket(patch_panel, output_pipe, "output")
             self._cards[card.id] = card.model_copy(update={"current_bucket": destination_bucket})
-            payload["output_pipe"] = output_pipe
-            payload["destination_bucket"] = destination_bucket
+            event_payload["output_pipe"] = output_pipe
+            event_payload["destination_bucket"] = destination_bucket
 
         event = CardEvent(
             card_id=card.id,
             event_type="card_validated",
             actor_id=validator_id,
-            payload=payload,
+            payload=event_payload,
         )
         self._record_event(event)
         self._store_idempotent(idempotency_key, event)
@@ -380,6 +373,47 @@ class InMemoryCardRuntime:
             return self._patch_panels[patch_panel_id]
         except KeyError as exc:
             raise NotFoundError(f"Patch Panel '{patch_panel_id}' is not registered") from exc
+
+    def _get_patch_panel_for_card(self, card: Card) -> PatchPanel:
+        patch_panel_id = card.workflow_version.rsplit(":", 1)[0]
+        return self._get_patch_panel(patch_panel_id)
+
+    def _claim_target(
+        self,
+        input_pipe: str,
+    ) -> tuple[PatchPanel, str, str, Card | None]:
+        matches: list[tuple[PatchPanel, str, str, Card | None]] = []
+        for patch_panel in self._patch_panels.values():
+            try:
+                bucket, node_id = resolve_pipe_bucket(patch_panel, input_pipe, "input")
+            except InvalidOperationError:
+                continue
+            card = next(
+                (
+                    candidate
+                    for candidate in self._cards.values()
+                    if candidate.workflow_version == f"{patch_panel.id}:{patch_panel.version}"
+                    and candidate.current_bucket == bucket
+                    and not self._has_active_lease(candidate.id)
+                ),
+                None,
+            )
+            matches.append((patch_panel, bucket, node_id, card))
+
+        if not matches:
+            raise NotFoundError(f"input pipe '{input_pipe}' is not bound to a Patch Panel")
+
+        with_cards = [match for match in matches if match[3] is not None]
+        if len(with_cards) == 1:
+            return with_cards[0]
+        if len(matches) == 1:
+            return matches[0]
+        if with_cards:
+            raise ConflictError(
+                f"input pipe '{input_pipe}' has claimable cards in multiple workflows"
+            )
+        first = matches[0]
+        return first[0], first[1], first[2], None
 
     def _single_patch_panel(self) -> PatchPanel:
         if not self._patch_panels:

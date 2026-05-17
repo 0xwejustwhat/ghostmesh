@@ -36,18 +36,6 @@ class PatchPanelRegistryStatus(StrEnum):
     SUPERSEDED = "superseded"
 
 
-class PatchPanelProposalType(StrEnum):
-    CREATE = "create"
-    MODIFY = "modify"
-
-
-class PatchPanelProposalStatus(StrEnum):
-    IN_REVIEW = "in_review"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    PROMOTED = "promoted"
-
-
 class GenesisIntentStatus(StrEnum):
     RECEIVED = "received"
     LAUNCHED = "launched"
@@ -308,43 +296,6 @@ class PatchPanelRegistryEntry(BaseModel):
         )
 
 
-class PatchPanelValidationReport(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    valid: bool
-    checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    errors: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-
-
-class PatchPanelProposalReviewEvent(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    actor_id: str
-    action: str
-    reason: str | None = None
-    occurred_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class PatchPanelProposal(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: UUID = Field(default_factory=uuid4)
-    proposal_type: PatchPanelProposalType
-    proposed_by: str
-    base_patch_panel_id: str | None = None
-    base_version: str | None = None
-    candidate_definition: PatchPanel
-    registry_metadata: PatchPanelRegistryMetadata
-    validation_report: PatchPanelValidationReport
-    status: PatchPanelProposalStatus = PatchPanelProposalStatus.IN_REVIEW
-    review_events: list[PatchPanelProposalReviewEvent] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    promoted_registry_entry_id: UUID | None = None
-
-
 class GenesisIntentConstraints(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -371,7 +322,7 @@ class GenesisIntent(BaseModel):
     candidate_registry_entry_ids: list[UUID] = Field(default_factory=list)
     selected_registry_entry_id: UUID | None = None
     launched_card_id: UUID | None = None
-    proposal_id: UUID | None = None
+    proposal_card_id: UUID | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = Field(default_factory=dict)
